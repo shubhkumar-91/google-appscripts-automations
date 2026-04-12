@@ -15,6 +15,17 @@ I built this script to entirely remove that mental load. This automation acts as
 * **Bulletproof Trigger Architecture:** Uses a dual-trigger system. An `onCalendarUpdate` trigger catches immediate changes, while a "Nightly Sweeper" time-driven trigger efficiently manages events scheduled far in the future, bypassing Google's strict trigger quotas.
 * **Configurable Debounce Logic:** Handles rapid successive calendar updates gracefully by dynamically creating and clearing execution timers to avoid redundant API calls.
 
+### 🕰️ The "Two-Trigger" Architecture
+Google Apps Script has a hard quota limit of 20 triggers per user. Naively creating a dynamic trigger for every single future calendar event (e.g., appointments booked months in advance) would quickly crash the script. To make this system flawless and infinitely scalable, I engineered a highly efficient "Two-Trigger" architecture:
+
+**1. The Scout & Scheduler (`markCalendarDirty`)**
+This acts as the watcher, powered by two static triggers:
+* **Event-Driven (`onCalendarUpdate`):** Catches any real-time additions or modifications made to the calendar immediately.
+* **Time-Driven ("The Nightly Sweeper"):** Runs once daily between `04:00 AM - 05:00 AM`. Instead of setting dozens of individual triggers for events weeks away, this sweep simply wakes up and checks if any of those distant events have finally entered our rolling 4-day action window. 
+
+**2. The Worker (`processedDeferredCommute`)**
+* **The Dynamic Debounce:** The Worker has NO permanent triggers. When the Scout detects valid events, it programmatically creates a single, temporary time-driven trigger to run the Worker a few minutes later (configurable via properties). If multiple calendar edits are made rapidly, the script deletes the old trigger and resets the timer. This debounce ensures that even if I edit 5 events in 3 minutes, the heavy lifting only happens *once*.
+
 ### ⚙️ Configuration & Script Properties
 The script relies on the following variables stored in `PropertiesService.getScriptProperties()`:
 
