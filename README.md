@@ -16,6 +16,7 @@ I'm making this public to share my thought process and code logic with the commu
 This is structured as a monorepo, keeping each automation isolated in its own domain:
 
 
+```text
 google-appscripts-automations/
 │
 ├── google-calendar/       # Smart calendar & auto-commute logic
@@ -25,6 +26,7 @@ google-appscripts-automations/
 ├── .gitignore
 ├── LICENSE                # MIT License
 └── README.md              # You are here
+```
 
 
 ### 🔭 Future Scope
