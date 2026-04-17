@@ -102,7 +102,7 @@ function getTrafficAdjustedStartTime(origin, destination, eventSummary, eventSta
   if (!directionsEst?.routes?.length) return null; // Handle error
 
   // Get standard duration (in seconds)
-  var standardDurationSecs = directionsEst.routes[0].legs[0].duration.value;
+  var standardDurationSecs = directionsEst?.routes?.[0]?.legs?.[0]?.duration?.value;
 
   // Calculate Tentative Departure Time
   // (Target Arrive - Standard Duration)
@@ -117,8 +117,8 @@ function getTrafficAdjustedStartTime(origin, destination, eventSummary, eventSta
     .getDirections();
 
   // Extract duration_in_traffic if available, otherwise fallback to standard duration
-  var leg = directionsTraffic.routes[0].legs[0];
-  var trafficDurationSecs = leg?.duration_in_traffic?.value ?? leg.duration.value;
+  var leg = directionsTraffic?.routes?.[0]?.legs?.[0];
+  var trafficDurationSecs = leg?.duration_in_traffic?.value ?? leg?.duration?.value;
 
   // --- STEP 3: Final Calculation ---
   // Actual Commute Start = Target Arrival - Real Traffic Duration
