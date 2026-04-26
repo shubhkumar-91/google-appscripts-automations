@@ -12,6 +12,7 @@ I built this script to entirely remove that mental load. This automation acts as
   * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases like `Origin: work` or `home` using the `CITY_ORIGINS_MAP`).
   * `ArriveBuffer: <mins>` / `ArriveTime: <mins>` and `PrepBuffer: <mins>` / `PrepTime: <mins>` to dynamically alter preparation times.
 * **Transit Mode:** Include `#transit`, `#metro`, `#bus`, or `#train` in the event title or description to calculate public transit durations instead of driving.
+* **Shared Calendar Support:** Automatically monitors and blocks commutes for events added to any configured shared or secondary calendars (e.g. Family calendars).
 * **Rich UI in Calendar:** Generates clean HTML descriptions for the commute event, utilizing emojis (🚗, 🚈, 🚩, 🏃🏻) for a quick, readable breakdown of travel and prep time.
 * **Bulletproof Trigger Architecture:** Uses a dual-trigger system. An `onCalendarUpdate` trigger catches immediate changes, while a "Nightly Sweeper" time-driven trigger efficiently manages events scheduled far in the future, bypassing Google's strict trigger quotas.
 * **Configurable Debounce Logic:** Handles rapid successive calendar updates gracefully by dynamically creating and clearing execution timers to avoid redundant API calls.
@@ -20,8 +21,8 @@ I built this script to entirely remove that mental load. This automation acts as
 Google Apps Script has a hard quota limit of 20 triggers per user. Naively creating a dynamic trigger for every single future calendar event (e.g., appointments booked months in advance) would quickly crash the script. To make this system flawless and infinitely scalable, I engineered a highly efficient "Two-Trigger" architecture:
 
 **1. The Scout & Scheduler (`markCalendarDirty`)**
-This acts as the watcher, powered by two static triggers:
-* **Event-Driven (`onCalendarUpdate`):** Catches any real-time additions or modifications made to the calendar immediately.
+This acts as the watcher, powered by static triggers:
+* **Event-Driven (`onCalendarUpdate`):** Catches any real-time additions or modifications made to the calendar immediately. *(Note: To enable this for shared calendars, you must run `setCalendarUpdateTriggers()` once to programmatically attach these watchers).*
 * **Time-Driven ("The Nightly Sweeper"):** Runs once daily between `04:00 AM - 05:00 AM`. Instead of setting dozens of individual triggers for events weeks away, this sweep simply wakes up and checks if any of those distant events have finally entered our rolling 4-day action window.
 
 **2. The Worker (`processedDeferredCommute`)**
@@ -40,6 +41,7 @@ The script relies on the following variables stored in `PropertiesService.getScr
 | `PREP_BUFFER` | Buffer time required to get ready (in minutes). | `5` |
 | `LOOK_AHEAD_DAYS` | Number of days to look ahead for scheduling commutes. | `4` |
 | `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, Flight, Hotel"` |
+| `SHARED_CALENDAR_NAMES` | Comma-separated list of shared/secondary calendars to monitor. | `"Parents Calendar, Family"` |
 | `CITY_ORIGINS_MAP` | JSON mapping for dynamic start locations by city. | *See example below* |
 
 **Example `CITY_ORIGINS_MAP` JSON:**
@@ -58,13 +60,14 @@ If you travel frequently, you can define different home bases depending on the c
 ```
 
 ### 🧠 Logic & Thought Process
-This script is broken down into 6 core functions, prioritizing separation of concerns:
-1. **`getEventsFiltered()`**: Fetches events within a highly specific, rolling 4-day EOD (End of Day) window.
+This script is broken down into 8 core functions, prioritizing separation of concerns:
+1. **`getEventsFiltered()`**: Fetches events across primary and matching shared calendars within a highly specific, rolling 4-day EOD (End of Day) window.
 2. **`markCalendarDirty()`**: The watcher. Bound to calendar updates and a nightly time-driven trigger. It evaluates if the calendar requires processing and manages the dynamic debounce trigger.
 3. **`processedDeferredCommute()`**: The worker. Takes the process lock, initiates the sync, and resets the system state.
-4. **`syncCommuteFinal(eventsList)`**: The orchestrator. Iterates through valid events and manages the creation pipeline.
+4. **`syncCommuteFinal(eventMap)`**: The orchestrator. Iterates through the map of valid events across primary and shared calendars, managing the creation pipeline.
 5. **`getTrafficAdjustedStartTime(...)`**: The calculator. Interfaces with Maps API and returns formatted JSON data containing the final commute metrics and rich HTML description.
-6. **`alreadyHasCommute(...)`**: A simple guardian function to provide a final safety check against duplicating commute blocks.
+6. **`alreadyHasCommute(...)`**: A simple guardian function to provide a final safety check against duplicating commute blocks in the target calendar.
 7. **`findOrigin(...)`**: Determines the correct starting location by evaluating regex tags, city origins mapping, and defaults.
+8. **`setCalendarUpdateTriggers()`**: A one-time setup utility that programmatically attaches update triggers to all your configured shared calendars.
 
 *Note: Ensure your `appsscript.json` manifest file has the correct `timeZone` configured (e.g., "Asia/Kolkata") for accurate EOD window boundary calculations!*

@@ -1,4 +1,4 @@
-function syncCommuteFinal(filteredEvents = []) {
+function syncCommuteFinal(filteredEventsMap = {}) {
   const props = PropertiesService.getScriptProperties();
 
   // 1. Load Settings from Environment Variables (Script Properties)
@@ -9,8 +9,9 @@ function syncCommuteFinal(filteredEvents = []) {
   // Keywords for Transit (add as many as you like)
   const transitKeywords = ["#transit", "#metro", "#bus", "#train"];
 
-
-  filteredEvents.forEach(event => {
+  for(let key in filteredEventsMap) {
+    let filteredEvents = filteredEventsMap?.[key]?.eventList || [];
+    filteredEvents.forEach(event => {
     const title = (event.summary || "").toLowerCase();
     const desc = (event.description || "").toLowerCase();
     const location = event.location;
@@ -54,24 +55,20 @@ function syncCommuteFinal(filteredEvents = []) {
       }
 
       // 2nd Duplicate check to avoid race condition runs, twice event creation
-      if (alreadyHasCommute(title, commuteEventTime?.commuteStart, eventStart)) {
+      if (alreadyHasCommute(key, title, commuteEventTime?.commuteStart, eventStart)) {
         console.log("⚠️ Due to race condition, the event already exist, skipping event addition here !!");
         return;
       }
 
       // 6. Create the Commute Event
-      CalendarApp.getDefaultCalendar().createEvent(
+      CalendarApp.getCalendarById(key).createEvent(
         "🚗 Commute: " + (title || "#NO TITLE FOUND"),
         commuteEventTime?.commuteStart,
         eventStart,
         {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Early: ${finalArrivalBuffer}m</li></ul>`}
-      ).setLocation(commuteEventTime?.end_address).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
+      ).setLocation(location).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
       console.log(commuteEventTime?.logMsg);
   });
-
-  // Save the new token for the next trigger
-  if (filteredEvents?.nextSyncToken) {
-    props.setProperty('syncToken', filteredEvents.nextSyncToken);
   }
 }
 
@@ -129,10 +126,10 @@ function getTrafficAdjustedStartTime(origin, destination, eventSummary, eventSta
 }
 
 
-function alreadyHasCommute(title, start, end) {
+function alreadyHasCommute(calendarId, title, start, end) {
 
   const searchTitle = "🚗 Commute: " + title;
-  const existing = CalendarApp.getDefaultCalendar().getEvents(start, end, {search: searchTitle});
+  const existing = CalendarApp.getCalendarById(calendarId).getEvents(start, end, {search: searchTitle});
   return !!existing.length;
 }
 
@@ -148,11 +145,10 @@ function markCalendarDirty() {
   }
 
 
-  const checkEvents = getEventsFiltered() ?? [];
-  const isDirty = !!checkEvents?.length;
-  props.setProperty('CALENDAR_DIRTY', isDirty);
+  const eventCount = getEventsFiltered()?.totalCount;
+  props.setProperty('CALENDAR_DIRTY', !!eventCount);
 
-  if(!isDirty) {
+  if(!eventCount) {
     console.log("No new events found, No processing needed.");
     return;
   };
@@ -172,51 +168,41 @@ function markCalendarDirty() {
 
     let nextRun = Date.now() + (workerDebounceTime * 60 * 1000);
 
-  console.log(`Found ${checkEvents?.length} new event(s). Flagged for processing.\nWorker will trigger after ${workerDebounceTime} minutes - `, new Date(nextRun));
+  console.log(`Found ${eventCount} new event(s). Flagged for processing.\nWorker will trigger after ${workerDebounceTime} minutes - `, new Date(nextRun));
 }
 
 function getEventsFiltered() {
-  const props = PropertiesService.getScriptProperties();
-
-  const lookAheadDays = parseInt(props.getProperty('LOOK_AHEAD_DAYS')) || 4;
-  const skipFlagRaw = props.getProperty('SKIP_FLAG') || "#nocommute, Flight, Hotel";
-  const now = new Date();
-  const horizon = new Date(now);
+  let props = PropertiesService.getScriptProperties(),
+    sharedCalsRaw = props.getProperty('SHARED_CALENDAR_NAMES') || "",
+    sharedCalsRegexStr = sharedCalsRaw?.split(',')?.map(k => k.trim())?.join("|"),
+    dynamicCalRegex = new RegExp(sharedCalsRegexStr, 'i'),
+    lookAheadDays = parseInt(props.getProperty('LOOK_AHEAD_DAYS')) || 4,
+    skipFlagRaw = props.getProperty('SKIP_FLAG') || "#nocommute, Flight, Hotel",
+    skipKeywordsRegexStr = skipFlagRaw?.split(',')?.map(k => k.trim().toLowerCase())?.join("|"),
+    dynamicRegex = new RegExp(skipKeywordsRegexStr, 'i');
+    now = new Date(),
+    horizon = new Date(now),
+    calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary}) => dynamicCalRegex.test(summary));
   horizon.setDate(now.getDate() + lookAheadDays);
   horizon.setHours(23,59,59,999);
+  calendarList?.unshift({id: 'primary', summary: 'Primary'});
 
-  const skipKeywordsRegexStr = skipFlagRaw?.split(',')?.map(k => k.trim().toLowerCase())?.join("|");
-  const dynamicRegex = new RegExp(skipKeywordsRegexStr, 'i');
-
-  // 3. Setup Sync Options
   const options = {
-    syncToken: props.getProperty('syncToken'),
-    timeMin: now.toISOString(),
-    timeMax: horizon.toISOString(),
-    singleEvents: true
-  };
+      timeMin: now.toISOString(),
+      timeMax: horizon.toISOString(),
+      singleEvents: true
+    };
 
+  let totalLength = 0, eventListMap = calendarList?.reduce((acc, {id: calId, summary}) => {
+    let evnts = Calendar.Events.list(calId, options),
+    pendingEvents = evnts?.items?.filter(({summary, description, location}) => location && !alreadyHasCommute(calId, summary, now, horizon) && !(dynamicRegex.test(summary) || dynamicRegex.test(description))) || [];
+    acc[calId] = {name: summary, calId, eventList: pendingEvents, count: pendingEvents?.length};
+    totalLength += pendingEvents?.length;
+    return acc;
+  }, {});
+  eventListMap['totalCount'] = totalLength;
 
-  let eventList;
-  try {
-    eventList = Calendar.Events.list('primary', options);
-  } catch (e) {
-    // console.log("Sync token invalid or first run. Resetting Sync Token...");
-    delete options.syncToken;
-    eventList = Calendar.Events.list('primary', options);
-  }
-
-  const focusEvents = eventList?.items?.filter(({summary, description, location}) => location && !alreadyHasCommute(summary, now, horizon) && !(dynamicRegex.test(summary) || dynamicRegex.test(description))) || [];
-
-  // let testList = eventList.items?.filter(({location}) => location)?.map(({summary, description}) => {return {...{summary, description}}});
-  // console.log("got list of events = ", testList)
-
-  // Save the new token for the next trigger
-  if (eventList.nextSyncToken) {
-    props.setProperty('syncToken', eventList.nextSyncToken);
-  }
-
-  return focusEvents;
+  return eventListMap;
 }
 
 
@@ -237,16 +223,27 @@ function processedDeferredCommute() {
     lock.waitLock(30000);
 
     // RUN YOUR MAIN LOGIC
-    const newEvents = getEventsFiltered();
-    syncCommuteFinal(newEvents);
+    const eventMap = getEventsFiltered();
+    // safety count check to avoid race-condition
+    if(!eventMap?.totalCount) {
+      console.log(`no events found, total count is ${eventMap?.totalCount} , skipping run`);
+      // RESET FLAG after successful run
+      props.setProperty('CALENDAR_DIRTY', false);
+      props.setProperty('CALENDAR_SCRIPT_RUNNING', false);
+      lock?.releaseLock();
+      return;
+    }
+    syncCommuteFinal(eventMap);
 
-    // RESET FLAG after successful run
-    props.setProperty('CALENDAR_DIRTY', false);
-    props.setProperty('CALENDAR_SCRIPT_RUNNING', false);
     console.log("Commute processing complete. Flags reset");
 
   } catch (e) { console.error("Could not obtain lock or error occurred: " + e.message); }
-  finally { lock.releaseLock(); }
+  finally {
+    // RESET FLAG after successful run
+    props.setProperty('CALENDAR_DIRTY', false);
+    props.setProperty('CALENDAR_SCRIPT_RUNNING', false);
+    lock?.releaseLock();
+  }
 }
 
 
@@ -274,5 +271,20 @@ function findOrigin(eventLocation, eventDescription) {
   return originLocation;
 }
 
+
+// One Time programmatically create triggers on shared Calendar(s)
+function setCalendarUpdateTriggers() {
+  let props = PropertiesService.getScriptProperties(),
+    sharedCalsRaw = props.getProperty('SHARED_CALENDAR_NAMES') || "",
+    sharedCalsRegexStr = sharedCalsRaw?.split(',')?.map(k => k.trim())?.join("|"),
+    dynamicCalRegex = new RegExp(sharedCalsRegexStr, 'i'),
+  calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary}) => dynamicCalRegex.test(summary));
+  calendarList.forEach(({id}) => {
+    ScriptApp.newTrigger('markCalendarDirty')
+    .forUserCalendar(id)
+    .onEventUpdated()
+    .create();
+  });
+}
 
 
