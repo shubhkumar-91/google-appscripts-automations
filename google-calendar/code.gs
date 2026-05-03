@@ -34,7 +34,7 @@ function syncCommuteFinal(filteredEventsMap = {}) {
     const eventStart = new Date(event.start.dateTime || event.start.date || event.start);
 
     const isTransit = transitKeywords.some(kw => title.includes(kw) || desc.includes(kw));
-    if (isTransit) console.log(`🚈 TRANSIT mode detected : ${title}`);
+    if (isTransit) console.log(`🚈 TRANSIT mode detected : ${event.summary}`);
 
 
 
@@ -61,10 +61,10 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
 
     // Call Maps Service with Traffic & Mode awareness
-      const commuteEventTime = getTrafficAdjustedStartTime(originLocation, location, title, eventStart, finalArrivalBuffer, finalPrepBuffer, isTransit);
+      const commuteEventTime = getTrafficAdjustedStartTime(originLocation, location, event.summary, eventStart, finalArrivalBuffer, finalPrepBuffer, isTransit);
 
       if (!commuteEventTime) {
-        console.error(`No directions found from maps for ${title}, Check script for edge case here !!`);
+        console.error(`No directions found from maps for ${event.summary}, Check script for edge case here !!`);
         return;
       }
 
@@ -76,7 +76,7 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
       // 6. Create the Commute Event
       CalendarApp.getCalendarById(key).createEvent(
-        "🚗 Commute: " + (title || "#NO TITLE FOUND"),
+        "🚗 Commute: " + (event.summary || "#NO TITLE FOUND"),
         commuteEventTime?.commuteStart,
         eventStart,
         {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Early: ${finalArrivalBuffer}m</li></ul>`}
@@ -300,5 +300,3 @@ function setCalendarUpdateTriggers() {
     .create();
   });
 }
-
-
