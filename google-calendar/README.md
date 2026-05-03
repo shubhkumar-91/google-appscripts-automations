@@ -70,6 +70,7 @@ Overrides the default `ARRIVAL_BUFFER` and `PREP_BUFFER` automatically based on 
   "default": { "arrive": 20, "prep": 15 }
 }
 ```
+> **💡 Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default. This is because flight events from Gmail usually mark the exact departure time, making a standard commute block impractical to reach "just in time". However, if you prefer the script to manage airport commutes, simply remove `Flight` from your `SKIP_FLAG` property and use the `EVENT_BUFFERS_MAP` (as shown above) to assign a large arrival buffer (e.g., 120 minutes) so you reach the airport well before departure.
 
 ### 🧠 Logic & Thought Process
 This script is broken down into 8 core functions, prioritizing separation of concerns:
