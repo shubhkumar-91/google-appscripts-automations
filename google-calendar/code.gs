@@ -3,11 +3,20 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
   // 1. Load Settings from Environment Variables (Script Properties)
   const homeAddress = props.getProperty('HOME_ADDRESS');
-  const arrivalBuffer = parseInt(props.getProperty('ARRIVAL_BUFFER')) || 15;
-  const prepBuffer = parseInt(props.getProperty('PREP_BUFFER')) || 5;
+  const arrivalBuffer = parseInt(props.getProperty('ARRIVAL_BUFFER')) || 20;
+  const prepBuffer = parseInt(props.getProperty('PREP_BUFFER')) || 15;
+
+  // Load the new Dynamic Buffers Map
+  const eventBuffersStr = props.getProperty('EVENT_BUFFERS_MAP');
+  let eventBuffersMap = {};
+  try { eventBuffersMap = eventBuffersStr ? JSON.parse(eventBuffersStr) : {}; }
+  catch(e) { console.error("⚠️ Error parsing EVENT_BUFFERS_MAP property: " + e); }
 
   // Keywords for Transit (add as many as you like)
   const transitKeywords = ["#transit", "#metro", "#bus", "#train"];
+
+  const bufferKeywordsRegexStr = Object.keys(eventBuffersMap)?.map(k => k.trim().toLowerCase())?.join("|");
+  const bufferKeywordsRegex = new RegExp(bufferKeywordsRegexStr, 'i');
 
   for(let key in filteredEventsMap) {
     let filteredEvents = filteredEventsMap?.[key]?.eventList || [];
@@ -15,6 +24,11 @@ function syncCommuteFinal(filteredEventsMap = {}) {
     const title = (event.summary || "").toLowerCase();
     const desc = (event.description || "").toLowerCase();
     const location = event.location;
+
+    let fullText = title + " " + desc,
+      aBufferTime = eventBuffersMap?.[bufferKeywordsRegex.exec(fullText)?.[0]?.toLowerCase() || "default"]?.['arrive'] || eventBuffersMap?.['default']?.['arrive'] || arrivalBuffer,
+      pBufferTime = eventBuffersMap?.[bufferKeywordsRegex.exec(fullText)?.[0]?.toLowerCase() || "default"]?.['prep'] || eventBuffersMap?.['default']?.['prep'] || prepBuffer;
+
 
     // 5. Maps API for Travel Duration
     const eventStart = new Date(event.start.dateTime || event.start.date || event.start);
@@ -25,20 +39,20 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
 
     // Get your default home base from properties
-    let finalArrivalBuffer = arrivalBuffer, finalPrepBuffer = prepBuffer;
+    let finalArrivalBuffer = aBufferTime, finalPrepBuffer = pBufferTime;
 
     const customArrivalBuffer = desc?.match(/(?:ArriveTime|ArrivalTime|ArriveBuffer|ArrivalBuffer):\s*(\d+)/i);
     const customPrepBuffer = desc?.match(/(?:PrepTime|PrepBuffer):\s*(\d+)/i);
 
     // If custom Arrive Buffer is found, override the default arrivalBuffer
     if (customArrivalBuffer?.[1]?.trim()) {
-      finalArrivalBuffer = Number(customArrivalBuffer?.[1]?.trim()) || arrivalBuffer;
+      finalArrivalBuffer = Number(customArrivalBuffer?.[1]?.trim()) || aBufferTime;
       // console.log("📍 Custom Arrive Buffer found for event '" + title);
     }
 
     // If custom Prep Buffer is found, override the default prepBuffer
     if (customPrepBuffer?.[1]?.trim()) {
-      finalPrepBuffer = Number(customPrepBuffer?.[1]?.trim()) || prepBuffer;
+      finalPrepBuffer = Number(customPrepBuffer?.[1]?.trim()) || pBufferTime;
       // console.log("📍 Custom Prep Buffer found for event '" + title);
     }
 
@@ -75,12 +89,12 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
 
 
-function getTrafficAdjustedStartTime(origin, destination, eventSummary, eventStartTime, arrivalBuffer = 15, prepBuffer = 5, isTransitRequested = false) {
+function getTrafficAdjustedStartTime(origin, destination, eventSummary, eventStartTime, arrivalBuffer = 20, prepBuffer = 15, isTransitRequested = false) {
 
   let travelMode = isTransitRequested ? Maps.DirectionFinder.Mode.TRANSIT : Maps.DirectionFinder.Mode.DRIVING;
   // 1. Set Target Arrival: 15 minutes before event starts
-  if(arrivalBuffer !== 15) console.log(`🚩 Custom Arrive Buffer = ${arrivalBuffer}, for event = ${eventSummary}`);
-  if(prepBuffer !== 5) console.log(`🏃🏻 Custom Prep Buffer = ${prepBuffer}, for event = ${eventSummary}`);
+  if(arrivalBuffer !== 20) console.log(`🚩 Custom Arrive Buffer = ${arrivalBuffer}, for event = ${eventSummary}`);
+  if(prepBuffer !== 15) console.log(`🏃🏻 Custom Prep Buffer = ${prepBuffer}, for event = ${eventSummary}`);
   var targetArrive = new Date(eventStartTime.getTime() - (arrivalBuffer * 60 * 1000));
 
   // --- STEP 1: Get Initial Estimate ---

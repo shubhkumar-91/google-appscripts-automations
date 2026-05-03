@@ -10,7 +10,7 @@ I built this script to entirely remove that mental load. This automation acts as
 * **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g., flights, hotels, `#nocommute`) and checks if a commute block already exists to prevent duplicates.
 * **Custom Overrides via Regex:** If you are traveling or need a specific setup, simply add tags to your event description! The script parses:
   * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases like `Origin: work` or `home` using the `CITY_ORIGINS_MAP`).
-  * `ArriveBuffer: <mins>` / `ArriveTime: <mins>` and `PrepBuffer: <mins>` / `PrepTime: <mins>` to dynamically alter preparation times.
+  * `ArriveBuffer: <mins>` / `ArriveTime: <mins>` and `PrepBuffer: <mins>` / `PrepTime: <mins>` to dynamically alter preparation times (all numbers are evaluated as minutes).
 * **Transit Mode:** Include `#transit`, `#metro`, `#bus`, or `#train` in the event title or description to calculate public transit durations instead of driving.
 * **Shared Calendar Support:** Automatically monitors and blocks commutes for events added to any configured shared or secondary calendars (e.g. Family calendars).
 * **Rich UI in Calendar:** Generates clean HTML descriptions for the commute event, utilizing emojis (🚗, 🚈, 🚩, 🏃🏻) for a quick, readable breakdown of travel and prep time.
@@ -37,11 +37,12 @@ The script relies on the following variables stored in `PropertiesService.getScr
 | `CALENDAR_DIRTY` | State flag to manage execution flow. | `"false"` |
 | `CALENDAR_SCRIPT_RUNNING` | Process lock to avoid race conditions. | `"false"` |
 | `WORKER_DEBOUNCE_TIMER` | Time (in minutes) to wait after the last calendar update before executing. | `5` |
-| `ARRIVAL_BUFFER` | Target arrival time before the event starts (in minutes). | `15` |
-| `PREP_BUFFER` | Buffer time required to get ready (in minutes). | `5` |
+| `ARRIVAL_BUFFER` | Default target arrival time before the event starts (in minutes). | `20` |
+| `PREP_BUFFER` | Default buffer time required to get ready (in minutes). | `15` |
+| `EVENT_BUFFERS_MAP` | JSON mapping keywords to specific arrival and prep times (all values are evaluated in minutes). | *See example below* |
 | `LOOK_AHEAD_DAYS` | Number of days to look ahead for scheduling commutes. | `4` |
 | `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, Flight, Hotel"` |
-| `SHARED_CALENDAR_NAMES` | Comma-separated list of shared/secondary calendars to monitor. | `"Parents Calendar, Family"` |
+| `SHARED_CALENDAR_NAMES` | Comma-separated list of shared/secondary calendars to monitor (matches against the Calendar's Name / Title). | `"Parents Calendar, Family"` |
 | `CITY_ORIGINS_MAP` | JSON mapping for dynamic start locations by city. | *See example below* |
 
 **Example `CITY_ORIGINS_MAP` JSON:**
@@ -56,6 +57,17 @@ If you travel frequently, you can define different home bases depending on the c
     "home": "shanti niketan jp road andheri west",
     "work": "we work vaswani chambers worli"
   }
+}
+```
+
+**Example `EVENT_BUFFERS_MAP` JSON:**
+Overrides the default `ARRIVAL_BUFFER` and `PREP_BUFFER` automatically based on keywords found in the event title or description using a dynamic regex.
+```json
+{
+  "flight": { "arrive": 120, "prep": 30 },
+  "airport": { "arrive": 120, "prep": 30 },
+  "train": { "arrive": 45, "prep": 20 },
+  "default": { "arrive": 20, "prep": 15 }
 }
 ```
 
