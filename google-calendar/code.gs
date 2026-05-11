@@ -24,6 +24,9 @@ function syncCommuteFinal(filteredEventsMap = {}) {
     const title = (event.summary || "").toLowerCase();
     const desc = (event.description || "").toLowerCase();
     const location = event.location;
+    const attUsers = event?.attendees?.filter(user => !user?.self)?.map(user => user?.email)?.join();
+
+
 
     let fullText = title + " " + desc,
       aBufferTime = eventBuffersMap?.[bufferKeywordsRegex.exec(fullText)?.[0]?.toLowerCase() || "default"]?.['arrive'] || eventBuffersMap?.['default']?.['arrive'] || arrivalBuffer,
@@ -74,12 +77,17 @@ function syncCommuteFinal(filteredEventsMap = {}) {
         return;
       }
 
+      let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Early: ${finalArrivalBuffer}m</li></ul>`};
+
+      if(attUsers?.length)
+        eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
+
       // 6. Create the Commute Event
       CalendarApp.getCalendarById(key).createEvent(
         "🚗 Commute: " + (event.summary || "#NO TITLE FOUND"),
         commuteEventTime?.commuteStart,
         eventStart,
-        {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Early: ${finalArrivalBuffer}m</li></ul>`}
+        eventOpts
       ).setLocation(location).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
       console.log(commuteEventTime?.logMsg);
   });
@@ -199,6 +207,8 @@ function getEventsFiltered() {
     calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary}) => dynamicCalRegex.test(summary));
   horizon.setDate(now.getDate() + lookAheadDays);
   horizon.setHours(23,59,59,999);
+  // console.log("got skipFlagRaw = ", skipFlagRaw, "\n\n skipFlagRaw split arr = ", skipFlagRaw?.split(','), "\n\n props.getProperty('SKIP_FLAG') = ", props.getProperty('SKIP_FLAG'));
+  // console.log("dynamicRegex = ", dynamicRegex);
   calendarList?.unshift({id: 'primary', summary: 'Primary'});
 
   const options = {
@@ -210,6 +220,12 @@ function getEventsFiltered() {
   let totalLength = 0, eventListMap = calendarList?.reduce((acc, {id: calId, summary}) => {
     let evnts = Calendar.Events.list(calId, options),
     pendingEvents = evnts?.items?.filter(({summary, description, location}) => location && !alreadyHasCommute(calId, summary, now, horizon) && !(dynamicRegex.test(summary) || dynamicRegex.test(description))) || [];
+
+    // let testList = evnts?.items?.filter(({location}) => !!location)?.forEach(({summary, attendees, location}) => {
+    //   let attUsers = attendees?.filter(({self}) => !self)?.map(user => user?.email);
+    //   console.log(`found location = ${location} in event ${summary}, with attendees \n ${attUsers}`);
+    // });
+
     acc[calId] = {name: summary, calId, eventList: pendingEvents, count: pendingEvents?.length};
     totalLength += pendingEvents?.length;
     return acc;
@@ -253,7 +269,7 @@ function processedDeferredCommute() {
 
   } catch (e) { console.error("Could not obtain lock or error occurred: " + e.message); }
   finally {
-    // RESET FLAG after successful run
+    // RESET lock anyways in the end
     props.setProperty('CALENDAR_DIRTY', false);
     props.setProperty('CALENDAR_SCRIPT_RUNNING', false);
     lock?.releaseLock();
