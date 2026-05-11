@@ -13,6 +13,7 @@ I built this script to entirely remove that mental load. This automation acts as
   * `ArriveBuffer: <mins>` / `ArriveTime: <mins>` and `PrepBuffer: <mins>` / `PrepTime: <mins>` to dynamically alter preparation times (all numbers are evaluated as minutes).
 * **Transit Mode:** Include `#transit`, `#metro`, `#bus`, or `#train` in the event title or description to calculate public transit durations instead of driving.
 * **Shared Calendar Support:** Automatically monitors and blocks commutes for events added to any configured shared or secondary calendars (e.g. Family calendars).
+* **Smart Attendee Sync:** Automatically copies guests (attendees) from the source event over to the created commute block, ensuring everyone is kept in the loop!
 * **Rich UI in Calendar:** Generates clean HTML descriptions for the commute event, utilizing emojis (🚗, 🚈, 🚩, 🏃🏻) for a quick, readable breakdown of travel and prep time.
 * **Bulletproof Trigger Architecture:** Uses a dual-trigger system. An `onCalendarUpdate` trigger catches immediate changes, while a "Nightly Sweeper" time-driven trigger efficiently manages events scheduled far in the future, bypassing Google's strict trigger quotas.
 * **Configurable Debounce Logic:** Handles rapid successive calendar updates gracefully by dynamically creating and clearing execution timers to avoid redundant API calls.
@@ -77,7 +78,7 @@ This script is broken down into 8 core functions, prioritizing separation of con
 1. **`getEventsFiltered()`**: Fetches events across primary and matching shared calendars within a highly specific, rolling 4-day EOD (End of Day) window.
 2. **`markCalendarDirty()`**: The watcher. Bound to calendar updates and a nightly time-driven trigger. It evaluates if the calendar requires processing and manages the dynamic debounce trigger.
 3. **`processedDeferredCommute()`**: The worker. Takes the process lock, initiates the sync, and resets the system state.
-4. **`syncCommuteFinal(eventMap)`**: The orchestrator. Iterates through the map of valid events across primary and shared calendars, managing the creation pipeline.
+4. **`syncCommuteFinal(eventMap)`**: The orchestrator. Iterates through the map of valid events across primary and shared calendars, managing the creation pipeline (including the copying of attendees).
 5. **`getTrafficAdjustedStartTime(...)`**: The calculator. Interfaces with Maps API and returns formatted JSON data containing the final commute metrics and rich HTML description.
 6. **`alreadyHasCommute(...)`**: A simple guardian function to provide a final safety check against duplicating commute blocks in the target calendar.
 7. **`findOrigin(...)`**: Determines the correct starting location by evaluating regex tags, city origins mapping, and defaults.
