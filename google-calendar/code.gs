@@ -18,6 +18,11 @@ function syncCommuteFinal(filteredEventsMap = {}) {
   const bufferKeywordsRegexStr = Object.keys(eventBuffersMap)?.map(k => k.trim().toLowerCase())?.join("|");
   const bufferKeywordsRegex = new RegExp(bufferKeywordsRegexStr, 'i');
 
+
+  const afterCommuteRaw = props.getProperty('AFTER_COMMUTE_KEYWORDS') || "#aftercommute, #return, #drivehome, Flight, Airport, Hotel";
+  const afterCommuteRegexStr = afterCommuteRaw?.split(',')?.map(k => k.trim().toLowerCase())?.join("|");
+  const afterCommuteRegex = new RegExp(afterCommuteRegexStr, 'i');
+
   for(let key in filteredEventsMap) {
     let filteredEvents = filteredEventsMap?.[key]?.eventList || [];
     filteredEvents.forEach(event => {
@@ -30,66 +35,106 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
     let fullText = title + " " + desc,
       aBufferTime = eventBuffersMap?.[bufferKeywordsRegex.exec(fullText)?.[0]?.toLowerCase() || "default"]?.['arrive'] || eventBuffersMap?.['default']?.['arrive'] || arrivalBuffer,
-      pBufferTime = eventBuffersMap?.[bufferKeywordsRegex.exec(fullText)?.[0]?.toLowerCase() || "default"]?.['prep'] || eventBuffersMap?.['default']?.['prep'] || prepBuffer;
+      pBufferTime = eventBuffersMap?.[bufferKeywordsRegex.exec(fullText)?.[0]?.toLowerCase() || "default"]?.['prep'] || eventBuffersMap?.['default']?.['prep'] || prepBuffer,
+      postPBufferTime = eventBuffersMap?.[bufferKeywordsRegex.exec(fullText)?.[0]?.toLowerCase() || "default"]?.['postPrep'] || eventBuffersMap?.['default']?.['postPrep'] || pBufferTime;
 
 
     // 5. Maps API for Travel Duration
     const eventStart = new Date(event.start.dateTime || event.start.date || event.start);
+    const eventEnd = new Date(event.end.dateTime || event.end.date || event.end);
+    const isAfterCommute = afterCommuteRegex.test(fullText);
 
     const isTransit = transitKeywords.some(kw => title.includes(kw) || desc.includes(kw));
     if (isTransit) console.log(`🚈 TRANSIT mode detected : ${event.summary}`);
 
+    // ----- PRE-COMMUTE LOGIC -----
+      // Get your default home base from properties
+      let finalArrivalBuffer = aBufferTime, finalPrepBuffer = pBufferTime;
 
+      const customArrivalBuffer = desc?.match(/(?:ArriveTime|ArrivalTime|ArriveBuffer|ArrivalBuffer):\s*(\d+)/i);
+      const customPrepBuffer = desc?.match(/(?:PrepTime|PrepBuffer):\s*(\d+)/i);
 
-    // Get your default home base from properties
-    let finalArrivalBuffer = aBufferTime, finalPrepBuffer = pBufferTime;
+      // If custom Arrive Buffer is found, override the default arrivalBuffer
+      if (customArrivalBuffer?.[1]?.trim()) {
+        finalArrivalBuffer = Number(customArrivalBuffer?.[1]?.trim()) || aBufferTime;
+        // console.log("📍 Custom Arrive Buffer found for event '" + title);
+      }
 
-    const customArrivalBuffer = desc?.match(/(?:ArriveTime|ArrivalTime|ArriveBuffer|ArrivalBuffer):\s*(\d+)/i);
-    const customPrepBuffer = desc?.match(/(?:PrepTime|PrepBuffer):\s*(\d+)/i);
+      // If custom Prep Buffer is found, override the default prepBuffer
+      if (customPrepBuffer?.[1]?.trim()) {
+        finalPrepBuffer = Number(customPrepBuffer?.[1]?.trim()) || pBufferTime;
+        // console.log("📍 Custom Prep Buffer found for event '" + title);
+      }
 
-    // If custom Arrive Buffer is found, override the default arrivalBuffer
-    if (customArrivalBuffer?.[1]?.trim()) {
-      finalArrivalBuffer = Number(customArrivalBuffer?.[1]?.trim()) || aBufferTime;
-      // console.log("📍 Custom Arrive Buffer found for event '" + title);
-    }
+      const originLocation = resolveLocation(location, desc, 'origin');
 
-    // If custom Prep Buffer is found, override the default prepBuffer
-    if (customPrepBuffer?.[1]?.trim()) {
-      finalPrepBuffer = Number(customPrepBuffer?.[1]?.trim()) || pBufferTime;
-      // console.log("📍 Custom Prep Buffer found for event '" + title);
-    }
-
-
-    const originLocation = findOrigin(location, desc);
-
-
-    // Call Maps Service with Traffic & Mode awareness
+      // Call Maps Service with Traffic & Mode awareness
       const commuteEventTime = getTrafficAdjustedStartTime(originLocation, location, event.summary, eventStart, finalArrivalBuffer, finalPrepBuffer, isTransit);
 
-      if (!commuteEventTime) {
+      if (!commuteEventTime)
         console.error(`No directions found from maps for ${event.summary}, Check script for edge case here !!`);
-        return;
-      }
-
-      // 2nd Duplicate check to avoid race condition runs, twice event creation
-      if (alreadyHasCommute(key, title, commuteEventTime?.commuteStart, eventStart)) {
+      else if (alreadyHasCommute(key, title, commuteEventTime?.commuteStart, eventStart))
         console.log("⚠️ Due to race condition, the event already exist, skipping event addition here !!");
-        return;
+      else {
+        let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Early: ${finalArrivalBuffer}m</li></ul>`};
+
+        if(attUsers?.length)
+          eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
+
+        // Create the Commute Event
+        CalendarApp.getCalendarById(key).createEvent(
+          "🚗 Commute: " + (title || "#NO TITLE FOUND"),
+          commuteEventTime?.commuteStart,
+          eventStart,
+          eventOpts
+        ).setLocation(location).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
+        console.log(commuteEventTime?.logMsg);
       }
 
-      let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Early: ${finalArrivalBuffer}m</li></ul>`};
+    // ----- AFTER-COMMUTE LOGIC -----
+    if (isAfterCommute) {
+      // 1. Determine the true starting point for the After-Commute
+      let afterCommuteOrigin = location;
 
-      if(attUsers?.length)
-        eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
+      // If it's a flight, extract the arrival airport from the title or description
+      if (/flight/i.test(fullText)) {
+        const arrivalMatch = fullText?.match(/to\s+([a-zA-Z\s]+(?:\([A-Z]{3}\))?)/i);
+        if (arrivalMatch && arrivalMatch[1]) {
+          afterCommuteOrigin = arrivalMatch[1].trim() + " Airport";
+          console.log(`🛬 Flight detected! Adjusted after-commute origin from ${location} to: ${afterCommuteOrigin}`);
+        }
+      }
+      let finalPostPrepBuffer = postPBufferTime;
+      const customPostPrepBuffer = desc?.match(/(?:PostPrepTime|PostPrepBuffer|AfterPrepTime|AfterPrepBuffer):\s*(\d+)/i);
 
-      // 6. Create the Commute Event
-      CalendarApp.getCalendarById(key).createEvent(
-        "🚗 Commute: " + (event.summary || "#NO TITLE FOUND"),
-        commuteEventTime?.commuteStart,
-        eventStart,
-        eventOpts
-      ).setLocation(location).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
-      console.log(commuteEventTime?.logMsg);
+      // If custom Post Prep Buffer is found, override the default postPrepBuffer
+      if (customPostPrepBuffer?.[1]?.trim()) {
+        finalPostPrepBuffer = Number(customPostPrepBuffer?.[1]?.trim()) || postPBufferTime;
+        // console.log("📍 Custom Post Prep Buffer found for event '" + title);
+      }
+
+      const destinationLocation = resolveLocation(afterCommuteOrigin, desc, 'destination');
+      const commuteEventTime = getAfterCommuteTimes(afterCommuteOrigin, destinationLocation, event.summary, eventEnd, finalPostPrepBuffer, isTransit);
+
+      if (!commuteEventTime)
+        console.error(`No after-commute directions found from maps for ${event.summary}, Check script for edge case here !!`);
+      else if (alreadyHasCommute(key, title, eventEnd, commuteEventTime?.commuteEnd))
+        console.log("⚠️ Due to race condition, the after-commute event already exist, skipping addition.");
+      else {
+        let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚕 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Post-Prep: ${finalPostPrepBuffer}m</li></ul>`};
+
+        if(attUsers?.length)
+          eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
+
+        CalendarApp.getCalendarById(key).createEvent(
+          "🚕 After-Commute: " + (event.summary || "#NO TITLE FOUND"),
+          commuteEventTime?.commuteStart,
+          commuteEventTime?.commuteEnd,
+          eventOpts
+        ).setLocation(destinationLocation).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
+        console.log(commuteEventTime?.logMsg);
+      }
+    }
   });
   }
 }
@@ -147,12 +192,44 @@ function getTrafficAdjustedStartTime(origin, destination, eventSummary, eventSta
   };
 }
 
+function getAfterCommuteTimes(origin, destination, eventSummary, eventEndTime, postPrepBuffer = 30, isTransitRequested = false) {
+
+  let travelMode = isTransitRequested ? Maps.DirectionFinder.Mode.TRANSIT : Maps.DirectionFinder.Mode.DRIVING;
+  if(postPrepBuffer !== 30) console.log(`🚩 Custom Post-Prep Buffer = ${postPrepBuffer}, for event = ${eventSummary}`);
+  var targetDepart = new Date(eventEndTime.getTime() + (postPrepBuffer * 60 * 1000));
+
+  var directionsTraffic = Maps.newDirectionFinder()
+    .setOrigin(origin)
+    .setDestination(destination)
+    .setDepart(targetDepart) // Depart AFTER the event + postPrepBuffer
+    .setMode(travelMode)
+    .getDirections();
+
+  if (!directionsTraffic?.routes?.length) return null;
+
+  var leg = directionsTraffic?.routes?.[0]?.legs?.[0];
+  var trafficDurationSecs = leg?.duration_in_traffic?.value ?? leg?.duration?.value;
+
+  var finalCommuteEnd = new Date(targetDepart.getTime() + (trafficDurationSecs * 1000));
+
+  return {
+    commuteStart: targetDepart,
+    commuteEnd: finalCommuteEnd,
+    durationText: leg?.duration_in_traffic?.text ?? leg?.duration?.text,
+    start_address: leg?.start_address,
+    end_address: leg?.end_address,
+    logMsg: `Added after-commute for ${eventSummary} with ${isTransitRequested ? "Transit" : "Drive"} Time :- Normal: ${leg?.duration?.text} | with Traffic: ${leg?.duration_in_traffic?.text ?? "N/A"}`
+  };
+}
+
+
 
 function alreadyHasCommute(calendarId, title, start, end) {
-
-  const searchTitle = "🚗 Commute: " + title;
-  const existing = CalendarApp.getCalendarById(calendarId).getEvents(start, end, {search: searchTitle});
-  return !!existing.length;
+  const searchTitlePre = "🚗 Commute: " + title;
+  const searchTitlePost = "🚕 After-Commute: " + title;
+  const existingPre = CalendarApp.getCalendarById(calendarId).getEvents(start, end, {search: searchTitlePre});
+  const existingPost = CalendarApp.getCalendarById(calendarId).getEvents(start, end, {search: searchTitlePost});
+  return !!existingPre.length || !!existingPost.length
 }
 
 
@@ -199,9 +276,12 @@ function getEventsFiltered() {
     sharedCalsRegexStr = sharedCalsRaw?.split(',')?.map(k => k.trim())?.join("|"),
     dynamicCalRegex = new RegExp(sharedCalsRegexStr, 'i'),
     lookAheadDays = parseInt(props.getProperty('LOOK_AHEAD_DAYS')) || 4,
-    skipFlagRaw = props.getProperty('SKIP_FLAG') || "#nocommute, Flight, Hotel",
+    skipFlagRaw = props.getProperty('SKIP_FLAG') || "#nocommute, #skip, Hotel",
     skipKeywordsRegexStr = skipFlagRaw?.split(',')?.map(k => k.trim().toLowerCase())?.join("|"),
-    dynamicRegex = new RegExp(skipKeywordsRegexStr, 'i');
+    dynamicRegex = new RegExp(skipKeywordsRegexStr, 'i'),
+    afterCommuteRaw = props.getProperty('AFTER_COMMUTE_KEYWORDS') || "#aftercommute, #return, #drivehome, Flight, Airport, Hotel",
+    afterCommuteRegexStr = afterCommuteRaw?.split(',')?.map(k => k.trim().toLowerCase())?.join("|"),
+    afterCommuteRegex = new RegExp(afterCommuteRegexStr, 'i'),
     now = new Date(),
     horizon = new Date(now),
     calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary}) => dynamicCalRegex.test(summary));
@@ -219,7 +299,15 @@ function getEventsFiltered() {
 
   let totalLength = 0, eventListMap = calendarList?.reduce((acc, {id: calId, summary}) => {
     let evnts = Calendar.Events.list(calId, options),
-    pendingEvents = evnts?.items?.filter(({summary, description, location}) => location && !alreadyHasCommute(calId, summary, now, horizon) && !(dynamicRegex.test(summary) || dynamicRegex.test(description))) || [];
+    pendingEvents = evnts?.items?.filter(({summary, description, location}) => {
+      if (!location) return false;
+      const fullText = (summary || "") + " " + (description || "");
+      const isSkip = dynamicRegex.test(fullText);
+      const isAfterCommute = afterCommuteRegex.test(fullText);
+      if (isSkip && !isAfterCommute) return false;
+      if(alreadyHasCommute(calId, summary, now, horizon)) return false;
+      return true;
+    }) || [];
 
     // let testList = evnts?.items?.filter(({location}) => !!location)?.forEach(({summary, attendees, location}) => {
     //   let attUsers = attendees?.filter(({self}) => !self)?.map(user => user?.email);
@@ -277,14 +365,15 @@ function processedDeferredCommute() {
 }
 
 
-function findOrigin(eventLocation, eventDescription) {
-  let props = PropertiesService.getScriptProperties(), cityOrigins = {},
-    cityOriginsString = props.getProperty('CITY_ORIGINS_MAP'),
+function resolveLocation(eventLocation, eventDescription, locType = 'origin') {
+  let props = PropertiesService.getScriptProperties(), cityPlaces = {},
+    regexTemp = {origin: /(?:Start|Origin):\s*(.+)/i, destination: /(?:Destination|EndLocation):\s*(.+)/i },
+    cityPlacesString = props.getProperty('CITY_PLACES_MAP') || props.getProperty('CITY_ORIGINS_MAP'),
     homeAddress = props.getProperty('HOME_ADDRESS'),
-    customOriginMatch = eventDescription?.match(/(?:Start|Origin):\s*(.+)/i)?.[1]?.trim(),
-    originType = /home|work|office/i.exec(customOriginMatch)?.[0]?.toLowerCase();
-  try { cityOrigins = cityOriginsString ? JSON.parse(cityOriginsString) : {}; }
-  catch(e) { console.error("Error parsing CITY_ORIGINS_MAP property: " + e); }
+    customLocMatch = eventDescription?.match(regexTemp?.[locType])?.[1]?.trim(),
+    locKeyType = /home|work|office|airport|hotel|default/i.exec(customLocMatch)?.[0]?.toLowerCase();
+  try { cityPlaces = cityPlacesString ? JSON.parse(cityPlacesString) : {}; }
+  catch(e) { console.error("Error parsing CITY_PLACES_MAP or CITY_ORIGINS_MAP property: " + e); }
   const dummyRoute = Maps.newDirectionFinder()
     .setOrigin(eventLocation)
     .setDestination(eventLocation)
@@ -292,13 +381,13 @@ function findOrigin(eventLocation, eventDescription) {
 
   // start_address is usually "Building, Area, City, Zip, Country"
   let fullAddress = dummyRoute?.routes?.[0]?.legs?.[0]?.start_address,
-    city = fullAddress?.split(',')?.map(p => p?.toLowerCase()?.trim()).slice(-4, -1)?.find(val => cityOrigins[val]),
-    cityData = cityOrigins?.[city];
+    city = fullAddress?.split(',')?.map(p => p?.toLowerCase()?.trim()).slice(-4, -1)?.find(val => cityPlaces[val]),
+    cityData = cityPlaces?.[city];
 
   // Fetch the specific origin address
-  const originLocation = customOriginMatch && !originType ? customOriginMatch : (cityData?.[originType || 'home'] || cityOrigins['default'] || homeAddress);
-  console.log("📍 Custom origin found for event, location set = " + originLocation);
-  return originLocation;
+  const resLocation = customLocMatch && !locKeyType ? customLocMatch : (cityData?.[locKeyType || 'home'] || cityData?.['default'] || cityPlaces['default'] || homeAddress);
+  console.log(`📍 Custom ${locType} found for event, location set = ${resLocation}`);
+  return resLocation;
 }
 
 
