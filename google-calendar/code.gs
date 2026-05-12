@@ -93,6 +93,17 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
     // ----- AFTER-COMMUTE LOGIC -----
     if (isAfterCommute) {
+      // 1. Determine the true starting point for the After-Commute
+      let afterCommuteOrigin = location;
+
+      // If it's a flight, extract the arrival airport from the title or description
+      if (/flight/i.test(fullText)) {
+        const arrivalMatch = fullText?.match(/to\s+([a-zA-Z\s]+(?:\([A-Z]{3}\))?)/i);
+        if (arrivalMatch && arrivalMatch[1]) {
+          afterCommuteOrigin = arrivalMatch[1].trim() + " Airport";
+          console.log(`🛬 Flight detected! Adjusted after-commute origin from ${location} to: ${afterCommuteOrigin}`);
+        }
+      }
       let finalPostPrepBuffer = postPBufferTime;
       const customPostPrepBuffer = desc?.match(/(?:PostPrepTime|PostPrepBuffer|AfterPrepTime|AfterPrepBuffer):\s*(\d+)/i);
 
@@ -102,8 +113,8 @@ function syncCommuteFinal(filteredEventsMap = {}) {
         // console.log("📍 Custom Post Prep Buffer found for event '" + title);
       }
 
-      const destinationLocation = resolveLocation(location, desc, 'destination');
-      const commuteEventTime = getAfterCommuteTimes(location, destinationLocation, event.summary, eventEnd, finalPostPrepBuffer, isTransit);
+      const destinationLocation = resolveLocation(afterCommuteOrigin, desc, 'destination');
+      const commuteEventTime = getAfterCommuteTimes(afterCommuteOrigin, destinationLocation, event.summary, eventEnd, finalPostPrepBuffer, isTransit);
 
       if (!commuteEventTime)
         console.error(`No after-commute directions found from maps for ${event.summary}, Check script for edge case here !!`);
