@@ -7,10 +7,12 @@ I built this script to entirely remove that mental load. This automation acts as
 
 ### ✨ Key Features
 * **Intelligent Routing:** Uses Google Maps service to calculate real-time driving or transit durations between an origin and the event destination.
-* **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g., flights, hotels, `#nocommute`) and checks if a commute block already exists to prevent duplicates.
+* **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g., flights, hotels, `#nocommute`, `#skip`) and checks if a commute block already exists to prevent duplicates.
 * **Custom Overrides via Regex:** If you are traveling or need a specific setup, simply add tags to your event description! The script parses:
-  * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases like `Origin: work` or `home` using the `CITY_ORIGINS_MAP`).
-  * `ArriveBuffer: <mins>` / `ArriveTime: <mins>` and `PrepBuffer: <mins>` / `PrepTime: <mins>` to dynamically alter preparation times (all numbers are evaluated as minutes).
+  * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases using the `CITY_PLACES_MAP`: `home` | `work` | `office` | `airport` | `hotel` | `default`).
+  * `Destination: <Location>` or `EndLocation: <Location>` to set a custom destination for after-commutes.
+  * `ArriveBuffer: <mins>` / `ArriveTime: <mins>`, `PrepBuffer: <mins>` / `PrepTime: <mins>`, and `PostPrepBuffer: <mins>` / `AfterPrepTime: <mins>` to dynamically alter preparation times (all numbers are evaluated as minutes). *Note: If these are already defined for the event category in `EVENT_BUFFERS_MAP`, these tags can be omitted.*
+* **Smart After-Commutes:** For events like flights or hotel stays, it creates a `🚕 After-Commute` block starting *after* the event finishes, automatically mapping you from the destination airport to your local hotel/home! Unlike the `SKIP_FLAG` blacklist, `AFTER_COMMUTE_KEYWORDS` acts as a whitelist. Including `#aftercommute`, `#return` or `#drivehome` in any event's description will explicitly tell the script to create an after-commute event for it.
 * **Transit Mode:** Include `#transit`, `#metro`, `#bus`, or `#train` in the event title or description to calculate public transit durations instead of driving.
 * **Shared Calendar Support:** Automatically monitors and blocks commutes for events added to any configured shared or secondary calendars (e.g. Family calendars).
 * **Smart Attendee Sync:** Automatically copies guests (attendees) from the source event over to the created commute block, ensuring everyone is kept in the loop!
@@ -42,21 +44,24 @@ The script relies on the following variables stored in `PropertiesService.getScr
 | `PREP_BUFFER` | Default buffer time required to get ready (in minutes). | `15` |
 | `EVENT_BUFFERS_MAP` | JSON mapping keywords to specific arrival and prep times (all values are evaluated in minutes). | *See example below* |
 | `LOOK_AHEAD_DAYS` | Number of days to look ahead for scheduling commutes. | `4` |
-| `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, Flight, Hotel"` |
+| `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, #skip, Hotel"` |
+| `AFTER_COMMUTE_KEYWORDS` | Comma-separated list of keywords that trigger an After-Commute instead of a pre-commute. | `"#aftercommute, #return, #drivehome, Flight, Airport, Hotel"` |
 | `SHARED_CALENDAR_NAMES` | Comma-separated list of shared/secondary calendars to monitor (matches against the Calendar's Name / Title). | `"Parents Calendar, Family"` |
-| `CITY_ORIGINS_MAP` | JSON mapping for dynamic start locations by city. | *See example below* |
+| `CITY_PLACES_MAP` | JSON mapping for dynamic start/end locations by city. | *See example below* |
 
-**Example `CITY_ORIGINS_MAP` JSON:**
+**Example `CITY_PLACES_MAP` JSON:**
 If you travel frequently, you can define different home bases depending on the city the event is in. The script matches the event location's city to this map. You can use unique place keywords, the script uses `Maps` service to resolve the start address.
 ```json
 {
   "default": "Blue Ridge Phase 1 Hinjawadi",
   "delhi": {
-    "home": "Sector 22, Dwarka, New Delhi, Delhi 110075"
+    "home": "Sector 22, Dwarka, New Delhi, Delhi 110075",
+    "default": "Taj Palace, New Delhi"
   },
   "mumbai": {
     "home": "shanti niketan jp road andheri west",
-    "work": "we work vaswani chambers worli"
+    "work": "we work vaswani chambers worli",
+    "hotel": "Trident Hotel, Bandra Kurla"
   }
 }
 ```
@@ -65,13 +70,13 @@ If you travel frequently, you can define different home bases depending on the c
 Overrides the default `ARRIVAL_BUFFER` and `PREP_BUFFER` automatically based on keywords found in the event title or description using a dynamic regex.
 ```json
 {
-  "flight": { "arrive": 120, "prep": 30 },
-  "airport": { "arrive": 120, "prep": 30 },
+  "flight": { "arrive": 120, "prep": 30, "postPrep": 45 },
+  "airport": { "arrive": 120, "prep": 30, "postPrep": 45 },
   "train": { "arrive": 45, "prep": 20 },
-  "default": { "arrive": 20, "prep": 15 }
+  "default": { "arrive": 20, "prep": 15, "postPrep": 15 }
 }
 ```
-> **💡 Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default. This is because flight events from Gmail usually mark the exact departure time, making a standard commute block impractical to reach "just in time". However, if you prefer the script to manage airport commutes, simply remove `Flight` from your `SKIP_FLAG` property and use the `EVENT_BUFFERS_MAP` (as shown above) to assign a large arrival buffer (e.g., 120 minutes) so you reach the airport well before departure.
+> **💡 Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default because flight events typically mark the exact flight duration, making a standard pre-commute block impractical. However, thanks to the **After-Commute** logic, the script intelligently intercepts flight events via the `AFTER_COMMUTE_KEYWORDS` config. It skips the useless pre-commute and automatically generates a `🚕 After-Commute` starting *after* you land, routing you from the destination airport straight to your local `CITY_PLACES_MAP` home/hotel!
 
 ### 🧠 Logic & Thought Process
 This script is broken down into 8 core functions, prioritizing separation of concerns:
@@ -79,9 +84,9 @@ This script is broken down into 8 core functions, prioritizing separation of con
 2. **`markCalendarDirty()`**: The watcher. Bound to calendar updates and a nightly time-driven trigger. It evaluates if the calendar requires processing and manages the dynamic debounce trigger.
 3. **`processedDeferredCommute()`**: The worker. Takes the process lock, initiates the sync, and resets the system state.
 4. **`syncCommuteFinal(eventMap)`**: The orchestrator. Iterates through the map of valid events across primary and shared calendars, managing the creation pipeline (including the copying of attendees).
-5. **`getTrafficAdjustedStartTime(...)`**: The calculator. Interfaces with Maps API and returns formatted JSON data containing the final commute metrics and rich HTML description.
-6. **`alreadyHasCommute(...)`**: A simple guardian function to provide a final safety check against duplicating commute blocks in the target calendar.
-7. **`findOrigin(...)`**: Determines the correct starting location by evaluating regex tags, city origins mapping, and defaults.
+5. **`getTrafficAdjustedStartTime(...)` & `getAfterCommuteTimes(...)`**: The calculators. Interfaces with the Maps API to compute accurate travel estimates (both backward from event start, and forward from event end) and returns formatted JSON data containing final commute metrics and rich HTML descriptions.
+6. **`alreadyHasCommute(...)`**: A robust guardian function that evaluates the calendar for existing commute blocks. It returns a specific state (`'both'`, `'pre'`, `'post'`, `'none'`) to ensure that dual commutes (before and after an event) are accurately tracked and prevents duplicate generation.
+7. **`resolveLocation(...)`**: Determines the correct start/end locations by evaluating regex tags, city places mapping, and defaults.
 8. **`setCalendarUpdateTriggers()`**: A one-time setup utility that programmatically attaches update triggers to all your configured shared calendars.
 
 *Note: Ensure your `appsscript.json` manifest file has the correct `timeZone` configured (e.g., "Asia/Kolkata") for accurate EOD window boundary calculations!*
