@@ -72,7 +72,7 @@ web_modules/
 
 # properties files
 *.properties
-
+properties
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
