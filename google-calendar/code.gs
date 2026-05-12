@@ -73,7 +73,7 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
       if (!commuteEventTime)
         console.error(`No directions found from maps for ${event.summary}, Check script for edge case here !!`);
-      else if (alreadyHasCommute(key, title, commuteEventTime?.commuteStart, eventStart) === 'both' || alreadyHasCommute(key, title, commuteEventTime?.commuteStart, eventStart) === 'pre')
+      else if (alreadyHasCommute(key, title, commuteEventTime?.commuteStart, eventStart))
         console.log("⚠️ Due to race condition, the event already exist, skipping event addition here !!");
       else {
         let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Early: ${finalArrivalBuffer}m</li></ul>`};
@@ -107,7 +107,7 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
       if (!commuteEventTime)
         console.error(`No after-commute directions found from maps for ${event.summary}, Check script for edge case here !!`);
-      else if (alreadyHasCommute(key, title, eventEnd, commuteEventTime?.commuteEnd) === 'both' || alreadyHasCommute(key, title, eventEnd, commuteEventTime?.commuteEnd) === 'post')
+      else if (alreadyHasCommute(key, title, eventEnd, commuteEventTime?.commuteEnd))
         console.log("⚠️ Due to race condition, the after-commute event already exist, skipping addition.");
       else {
         let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚕 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Post-Prep: ${finalPostPrepBuffer}m</li></ul>`};
@@ -218,16 +218,7 @@ function alreadyHasCommute(calendarId, title, start, end) {
   const searchTitlePost = "🚕 After-Commute: " + title;
   const existingPre = CalendarApp.getCalendarById(calendarId).getEvents(start, end, {search: searchTitlePre});
   const existingPost = CalendarApp.getCalendarById(calendarId).getEvents(start, end, {search: searchTitlePost});
-  switch (true) {
-    case (existingPre.length && existingPost.length):
-      return 'both';
-    case (existingPre.length):
-      return 'pre';
-    case (existingPost.length):
-      return 'post';
-    default:
-      return 'none';
-  }
+  return !!existingPre.length || !!existingPost.length
 }
 
 
@@ -303,9 +294,7 @@ function getEventsFiltered() {
       const isSkip = dynamicRegex.test(fullText);
       const isAfterCommute = afterCommuteRegex.test(fullText);
       if (isSkip && !isAfterCommute) return false;
-      let hasCommute = alreadyHasCommute(calId, summary, now, horizon);
-      console.log(`got hasCommute = ${hasCommute} for event ${summary}`);
-      if(hasCommute === 'both') return false;
+      if(alreadyHasCommute(calId, summary, now, horizon)) return false;
       return true;
     }) || [];
 
