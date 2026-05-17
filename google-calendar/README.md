@@ -7,7 +7,7 @@ I built this script to entirely remove that mental load. This automation acts as
 
 ### ✨ Key Features
 * **Intelligent Routing:** Uses Google Maps service to calculate real-time driving or transit durations between an origin and the event destination.
-* **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g., flights, hotels, `#nocommute`, `#skip`) and checks if a commute block already exists to prevent duplicates.
+* **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g., flights, hotels, `#nocommute`, `#skip`) or specific event color, and checks if a commute block already exists to prevent duplicates.
 * **Custom Overrides via Regex:** If you are traveling or need a specific setup, simply add tags to your event description! The script parses:
   * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases using the `CITY_PLACES_MAP`: `home` | `work` | `office` | `airport` | `hotel` | `default`).
   * `Destination: <Location>` or `EndLocation: <Location>` to set a custom destination for after-commutes.
@@ -48,6 +48,7 @@ The script relies on the following variables stored in `PropertiesService.getScr
 | `AFTER_COMMUTE_KEYWORDS` | Comma-separated list of keywords that trigger an After-Commute instead of a pre-commute. | `"#aftercommute, #return, #drivehome, Flight, Airport, Hotel"` |
 | `SHARED_CALENDAR_NAMES` | Comma-separated list of shared/secondary calendars to monitor (matches against the Calendar's Name / Title). | `"Parents Calendar, Family"` |
 | `CITY_PLACES_MAP` | JSON mapping for dynamic start/end locations by city. | *See example below* |
+| `SKIP_COLOR_CODE` | The Calendar API color ID used to manually flag an event to be ignored by the script. | `"11"` (Tomato) |
 
 **Example `CITY_PLACES_MAP` JSON:**
 If you travel frequently, you can define different home bases depending on the city the event is in. The script matches the event location's city to this map. You can use unique place keywords, the script uses `Maps` service to resolve the start address.
@@ -76,7 +77,26 @@ Overrides the default `ARRIVAL_BUFFER` and `PREP_BUFFER` automatically based on 
   "default": { "arrive": 20, "prep": 15, "postPrep": 15 }
 }
 ```
-> **💡 Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default because flight events typically mark the exact flight duration, making a standard pre-commute block impractical. However, thanks to the **After-Commute** logic, the script intelligently intercepts flight events via the `AFTER_COMMUTE_KEYWORDS` config. It skips the useless pre-commute and automatically generates a `🚕 After-Commute` starting *after* you land, routing you from the destination airport straight to your local `CITY_PLACES_MAP` home/hotel!
+
+#### 🎨 Manual Override via Event Color
+If you have a specific one-off event (like a connecting layover flight) that you want the script to completely ignore, you can simply change the event color in your Google Calendar UI. The script will skip any event matching the `SKIP_COLOR_CODE` property.
+
+**Valid Color IDs:**
+* `1` : Lavender (Pale Blue)
+* `2` : Sage (Pale Green)
+* `3` : Grape (Mauve)
+* `4` : Flamingo (Pale Red)
+* `5` : Banana (Yellow)
+* `6` : Tangerine (Orange)
+* `7` : Peacock (Cyan)
+* `8` : Graphite (Gray) ⚠️ *See note below*
+* `9` : Blueberry (Blue)
+* `10` : Basil (Green)
+* `11` : Tomato (Red) - **[Default]** for skipping events
+
+> ⚠️ **Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default because flight events typically mark the exact flight duration, making a standard pre-commute block impractical. However, thanks to the **After-Commute** logic, the script intelligently intercepts flight events via the `AFTER_COMMUTE_KEYWORDS` config. It skips the useless pre-commute and automatically generates a `🚕 After-Commute` starting *after* you land, routing you from the destination airport straight to your local `CITY_PLACES_MAP` home/hotel!
+
+> ⚠️ **Note on Graphite (Gray):** While you can configure the script to use `"8"` as the skip color, it is highly recommended to use another color. The script automatically creates the actual "🚗 Commute" events using this exact Gray color code to keep your calendar visually clean. Using it as a skip flag could cause confusion!
 
 ### 🧠 Logic & Thought Process
 This script is broken down into 8 core functions, prioritizing separation of concerns:

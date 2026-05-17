@@ -236,7 +236,7 @@ function alreadyHasCommute(calendarId, title, start, end) {
 function markCalendarDirty() {
   const props = PropertiesService.getScriptProperties();
   const isScriptRunning = props.getProperty('CALENDAR_SCRIPT_RUNNING') || 'false';
-  const workerDebounceTime = props.getProperty('WORKER_DEBOUNCE_TIMER') || 8;
+  const workerDebounceTime = props.getProperty('WORKER_DEBOUNCE_TIMER') || 5;
 
   if (isScriptRunning === 'true') {
     console.log("calendar script running, skip fetching new events");
@@ -276,6 +276,7 @@ function getEventsFiltered() {
     sharedCalsRegexStr = sharedCalsRaw?.split(',')?.map(k => k.trim())?.join("|"),
     dynamicCalRegex = new RegExp(sharedCalsRegexStr, 'i'),
     lookAheadDays = parseInt(props.getProperty('LOOK_AHEAD_DAYS')) || 4,
+    skipColorCode = props.getProperty('SKIP_COLOR_CODE') || '11', // '11' is Tomato (Red)
     skipFlagRaw = props.getProperty('SKIP_FLAG') || "#nocommute, #skip, Hotel",
     skipKeywordsRegexStr = skipFlagRaw?.split(',')?.map(k => k.trim().toLowerCase())?.join("|"),
     dynamicRegex = new RegExp(skipKeywordsRegexStr, 'i'),
@@ -299,8 +300,11 @@ function getEventsFiltered() {
 
   let totalLength = 0, eventListMap = calendarList?.reduce((acc, {id: calId, summary}) => {
     let evnts = Calendar.Events.list(calId, options),
-    pendingEvents = evnts?.items?.filter(({summary, description, location}) => {
+    pendingEvents = evnts?.items?.filter(({summary, description, location, colorId}) => {
       if (!location) return false;
+
+      if (colorId === skipColorCode) return false;
+
       const fullText = (summary || "") + " " + (description || "");
       const isSkip = dynamicRegex.test(fullText);
       const isAfterCommute = afterCommuteRegex.test(fullText);
