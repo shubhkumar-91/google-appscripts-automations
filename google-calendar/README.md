@@ -25,11 +25,12 @@ Google Apps Script has a hard quota limit of 20 triggers per user. Naively creat
 
 **1. The Scout & Scheduler (`markCalendarDirty`)**
 This acts as the watcher, powered by static triggers:
-* **Event-Driven (`onCalendarUpdate`):** Catches any real-time additions or modifications made to the calendar immediately. *(Note: To enable this for shared calendars, you must run `setCalendarUpdateTriggers()` once to programmatically attach these watchers).*
+* **Event-Driven (`onCalendarUpdate`):** Catches any real-time additions or modifications made to your Primary and Shared calendars immediately. *(Note: You must run `setCalendarUpdateTriggers()` once manually to programmatically attach these watchers).*
 * **Time-Driven ("The Nightly Sweeper"):** Runs once daily between `04:00 AM - 05:00 AM`. Instead of setting dozens of individual triggers for events weeks away, this sweep simply wakes up and checks if any of those distant events have finally entered our rolling 4-day action window.
 
 **2. The Worker (`processedDeferredCommute`)**
 * **The Dynamic Debounce:** The Worker has NO permanent triggers. When the Scout detects valid events, it programmatically creates a single, temporary time-driven trigger to run the Worker a few minutes later (configurable via properties). If multiple calendar edits are made rapidly, the script deletes the old trigger and resets the timer. This debounce ensures that even if I edit 5 events in 3 minutes, the heavy lifting only happens *once*.
+* **Trigger Muting (Recursive Loop Preventer):** When the Worker actually processes events and adds new Commute blocks, those additions would normally fire another calendar update trigger! To prevent this recursive loop, the Worker temporarily **mutes** all `onCalendarUpdate` triggers while it runs, and seamlessly reinstalls them once finished.
 
 ### ⚙️ Configuration & Script Properties
 The script relies on the following variables stored in `PropertiesService.getScriptProperties()`:
@@ -107,6 +108,6 @@ This script is broken down into 8 core functions, prioritizing separation of con
 5. **`getTrafficAdjustedStartTime(...)` & `getAfterCommuteTimes(...)`**: The calculators. Interfaces with the Maps API to compute accurate travel estimates (both backward from event start, and forward from event end) and returns formatted JSON data containing final commute metrics and rich HTML descriptions.
 6. **`alreadyHasCommute(...)`**: A robust guardian function that provides a final safety check against duplicating commute blocks. By evaluating specific event timeframes, it cleanly isolates and verifies pre-commutes and after-commutes independently.
 7. **`resolveLocation(...)`**: Determines the correct start/end locations by evaluating regex tags, city places mapping, and defaults.
-8. **`setCalendarUpdateTriggers()`**: A one-time setup utility that programmatically attaches update triggers to all your configured shared calendars.
+8. **`setCalendarUpdateTriggers()` & `removeAllCalendarUpdateTriggers()`**: Utilities that programmatically manage the lifecycle of `onCalendarUpdate` triggers across your primary and shared calendars to prevent recursive execution loops.
 
 *Note: Ensure your `appsscript.json` manifest file has the correct `timeZone` configured (e.g., "Asia/Kolkata") for accurate EOD window boundary calculations!*

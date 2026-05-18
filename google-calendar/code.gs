@@ -343,6 +343,7 @@ function processedDeferredCommute() {
   try {
     // Wait up to 30 seconds for a concurrent run to finish
     lock.waitLock(30000);
+    removeAllCalendarUpdateTriggers();
 
     // RUN YOUR MAIN LOGIC
     const eventMap = getEventsFiltered();
@@ -361,6 +362,7 @@ function processedDeferredCommute() {
 
   } catch (e) { console.error("Could not obtain lock or error occurred: " + e.message); }
   finally {
+    setCalendarUpdateTriggers();
     // RESET lock anyways in the end
     props.setProperty('CALENDAR_DIRTY', false);
     props.setProperty('CALENDAR_SCRIPT_RUNNING', false);
@@ -397,15 +399,32 @@ function resolveLocation(eventLocation, eventDescription, locType = 'origin') {
 
 // One Time programmatically create triggers on shared Calendar(s)
 function setCalendarUpdateTriggers() {
+  removeAllCalendarUpdateTriggers();
   let props = PropertiesService.getScriptProperties(),
+    myEmail = Session.getEffectiveUser().getEmail(),
     sharedCalsRaw = props.getProperty('SHARED_CALENDAR_NAMES') || "",
     sharedCalsRegexStr = sharedCalsRaw?.split(',')?.map(k => k.trim())?.join("|"),
     dynamicCalRegex = new RegExp(sharedCalsRegexStr, 'i'),
   calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary}) => dynamicCalRegex.test(summary));
-  calendarList.forEach(({id}) => {
-    ScriptApp.newTrigger('markCalendarDirty')
-    .forUserCalendar(id)
-    .onEventUpdated()
-    .create();
+  calendarList.unshift({id: myEmail, summary: 'Primary'});
+  calendarList.forEach(({id, summary}) => {
+    try {
+      ScriptApp.newTrigger('markCalendarDirty')
+      .forUserCalendar(id)
+      .onEventUpdated()
+      .create();
+    } catch(e) { console.error(`⚠️ Failed to set trigger for ${summary}: ${e.message}`); }
   });
+  console.log("🔔 All Calendar Update triggers successfully reattached.");
 }
+
+
+function removeAllCalendarUpdateTriggers(funcStr = 'markCalendarDirty', eventType = ScriptApp.EventType.ON_EVENT_UPDATED) {
+  const allTriggers = ScriptApp.getProjectTriggers();
+  allTriggers.forEach(t => {
+    // Only delete the onUpdate triggers for markCalendarDirty
+    if(t?.getHandlerFunction() === funcStr && t?.getEventType() === eventType) ScriptApp.deleteTrigger(t);
+  });
+  console.log("🔕 Temporarily muted all Calendar Update triggers.");
+}
+
