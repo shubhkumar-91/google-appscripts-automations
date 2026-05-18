@@ -7,7 +7,7 @@ I built this script to entirely remove that mental load. This automation acts as
 
 ### ✨ Key Features
 * **Intelligent Routing:** Uses Google Maps service to calculate real-time driving or transit durations between an origin and the event destination.
-* **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g., flights, hotels, `#nocommute`, `#skip`) and checks if a commute block already exists to prevent duplicates.
+* **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g. flights, hotels, `#nocommute`, `#skip`) or specific event color, and checks if a commute block already exists to prevent duplicates.
 * **Custom Overrides via Regex:** If you are traveling or need a specific setup, simply add tags to your event description! The script parses:
   * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases using the `CITY_PLACES_MAP`: `home` | `work` | `office` | `airport` | `hotel` | `default`).
   * `Destination: <Location>` or `EndLocation: <Location>` to set a custom destination for after-commutes.
@@ -25,11 +25,12 @@ Google Apps Script has a hard quota limit of 20 triggers per user. Naively creat
 
 **1. The Scout & Scheduler (`markCalendarDirty`)**
 This acts as the watcher, powered by static triggers:
-* **Event-Driven (`onCalendarUpdate`):** Catches any real-time additions or modifications made to the calendar immediately. *(Note: To enable this for shared calendars, you must run `setCalendarUpdateTriggers()` once to programmatically attach these watchers).*
+* **Event-Driven (`onCalendarUpdate`):** Catches any real-time additions or modifications made to your Primary and Shared calendars immediately. *(Note: You must run `setCalendarUpdateTriggers()` once manually to programmatically attach these watchers).*
 * **Time-Driven ("The Nightly Sweeper"):** Runs once daily between `04:00 AM - 05:00 AM`. Instead of setting dozens of individual triggers for events weeks away, this sweep simply wakes up and checks if any of those distant events have finally entered our rolling 4-day action window.
 
 **2. The Worker (`processedDeferredCommute`)**
 * **The Dynamic Debounce:** The Worker has NO permanent triggers. When the Scout detects valid events, it programmatically creates a single, temporary time-driven trigger to run the Worker a few minutes later (configurable via properties). If multiple calendar edits are made rapidly, the script deletes the old trigger and resets the timer. This debounce ensures that even if I edit 5 events in 3 minutes, the heavy lifting only happens *once*.
+* **Trigger Muting (Recursive Loop Preventer):** When the Worker actually processes events and adds new Commute blocks, those additions would normally fire another calendar update trigger! To prevent this recursive loop, the Worker temporarily **mutes** all `onCalendarUpdate` triggers while it runs, and seamlessly reinstalls them once finished.
 
 ### ⚙️ Configuration & Script Properties
 The script relies on the following variables stored in `PropertiesService.getScriptProperties()`:
@@ -44,10 +45,11 @@ The script relies on the following variables stored in `PropertiesService.getScr
 | `PREP_BUFFER` | Default buffer time required to get ready (in minutes). | `15` |
 | `EVENT_BUFFERS_MAP` | JSON mapping keywords to specific arrival and prep times (all values are evaluated in minutes). | *See example below* |
 | `LOOK_AHEAD_DAYS` | Number of days to look ahead for scheduling commutes. | `4` |
-| `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, #skip, Hotel"` |
+| `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, #skip, Flight, Hotel"` |
 | `AFTER_COMMUTE_KEYWORDS` | Comma-separated list of keywords that trigger an After-Commute instead of a pre-commute. | `"#aftercommute, #return, #drivehome, Flight, Airport, Hotel"` |
 | `SHARED_CALENDAR_NAMES` | Comma-separated list of shared/secondary calendars to monitor (matches against the Calendar's Name / Title). | `"Parents Calendar, Family"` |
 | `CITY_PLACES_MAP` | JSON mapping for dynamic start/end locations by city. | *See example below* |
+| `SKIP_COLOR_CODE` | The Calendar API color ID used to manually flag an event to be ignored by the script. | `"11"` (Tomato) |
 
 **Example `CITY_PLACES_MAP` JSON:**
 If you travel frequently, you can define different home bases depending on the city the event is in. The script matches the event location's city to this map. You can use unique place keywords, the script uses `Maps` service to resolve the start address.
@@ -76,7 +78,26 @@ Overrides the default `ARRIVAL_BUFFER` and `PREP_BUFFER` automatically based on 
   "default": { "arrive": 20, "prep": 15, "postPrep": 15 }
 }
 ```
-> **💡 Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default because flight events typically mark the exact flight duration, making a standard pre-commute block impractical. However, thanks to the **After-Commute** logic, the script intelligently intercepts flight events via the `AFTER_COMMUTE_KEYWORDS` config. It skips the useless pre-commute and automatically generates a `🚕 After-Commute` starting *after* you land, routing you from the destination airport straight to your local `CITY_PLACES_MAP` home/hotel!
+
+#### 🎨 Manual Override via Event Color
+If you have a specific one-off event (like a connecting layover flight) that you want the script to completely ignore, you can simply change the event color in your Google Calendar UI. The script will skip any event matching the `SKIP_COLOR_CODE` property.
+
+**Valid Color IDs:**
+* `1` : Lavender (Pale Blue)
+* `2` : Sage (Pale Green)
+* `3` : Grape (Mauve)
+* `4` : Flamingo (Pale Red)
+* `5` : Banana (Yellow)
+* `6` : Tangerine (Orange)
+* `7` : Peacock (Cyan)
+* `8` : Graphite (Gray) ⚠️ *See note below*
+* `9` : Blueberry (Blue)
+* `10` : Basil (Green)
+* `11` : Tomato (Red) - **[Default]** for skipping events
+
+> ⚠️ **Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default because flight events typically mark the exact flight duration, making a standard pre-commute block impractical. However, thanks to the **After-Commute** logic, the script intelligently intercepts flight events via the `AFTER_COMMUTE_KEYWORDS` config. It skips the useless pre-commute and automatically generates a `🚕 After-Commute` starting *after* you land, routing you from the destination airport straight to your local `CITY_PLACES_MAP` home/hotel!
+
+> ⚠️ **Note on Graphite (Gray):** While you can configure the script to use `"8"` as the skip color, it is highly recommended to use another color. The script automatically creates the actual "🚗 Commute" events using this exact Gray color code to keep your calendar visually clean. Using it as a skip flag could cause confusion!
 
 ### 🧠 Logic & Thought Process
 This script is broken down into 8 core functions, prioritizing separation of concerns:
@@ -87,6 +108,6 @@ This script is broken down into 8 core functions, prioritizing separation of con
 5. **`getTrafficAdjustedStartTime(...)` & `getAfterCommuteTimes(...)`**: The calculators. Interfaces with the Maps API to compute accurate travel estimates (both backward from event start, and forward from event end) and returns formatted JSON data containing final commute metrics and rich HTML descriptions.
 6. **`alreadyHasCommute(...)`**: A robust guardian function that provides a final safety check against duplicating commute blocks. By evaluating specific event timeframes, it cleanly isolates and verifies pre-commutes and after-commutes independently.
 7. **`resolveLocation(...)`**: Determines the correct start/end locations by evaluating regex tags, city places mapping, and defaults.
-8. **`setCalendarUpdateTriggers()`**: A one-time setup utility that programmatically attaches update triggers to all your configured shared calendars.
+8. **`setCalendarUpdateTriggers()` & `removeAllCalendarUpdateTriggers()`**: Utilities that programmatically manage the lifecycle of `onCalendarUpdate` triggers across your primary and shared calendars to prevent recursive execution loops.
 
 *Note: Ensure your `appsscript.json` manifest file has the correct `timeZone` configured (e.g., "Asia/Kolkata") for accurate EOD window boundary calculations!*
