@@ -7,7 +7,7 @@ I built this script to entirely remove that mental load. This automation acts as
 
 ### ✨ Key Features
 * **Intelligent Routing:** Uses Google Maps service to calculate real-time driving or transit durations between an origin and the event destination.
-* **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g., flights, hotels, `#nocommute`, `#skip`) or specific event color, and checks if a commute block already exists to prevent duplicates.
+* **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g. flights, hotels, `#nocommute`, `#skip`) or specific event color, and checks if a commute block already exists to prevent duplicates.
 * **Custom Overrides via Regex:** If you are traveling or need a specific setup, simply add tags to your event description! The script parses:
   * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases using the `CITY_PLACES_MAP`: `home` | `work` | `office` | `airport` | `hotel` | `default`).
   * `Destination: <Location>` or `EndLocation: <Location>` to set a custom destination for after-commutes.
@@ -44,7 +44,7 @@ The script relies on the following variables stored in `PropertiesService.getScr
 | `PREP_BUFFER` | Default buffer time required to get ready (in minutes). | `15` |
 | `EVENT_BUFFERS_MAP` | JSON mapping keywords to specific arrival and prep times (all values are evaluated in minutes). | *See example below* |
 | `LOOK_AHEAD_DAYS` | Number of days to look ahead for scheduling commutes. | `4` |
-| `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, #skip, Hotel"` |
+| `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, #skip, Flight, Hotel"` |
 | `AFTER_COMMUTE_KEYWORDS` | Comma-separated list of keywords that trigger an After-Commute instead of a pre-commute. | `"#aftercommute, #return, #drivehome, Flight, Airport, Hotel"` |
 | `SHARED_CALENDAR_NAMES` | Comma-separated list of shared/secondary calendars to monitor (matches against the Calendar's Name / Title). | `"Parents Calendar, Family"` |
 | `CITY_PLACES_MAP` | JSON mapping for dynamic start/end locations by city. | *See example below* |

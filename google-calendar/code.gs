@@ -277,7 +277,7 @@ function getEventsFiltered() {
     dynamicCalRegex = new RegExp(sharedCalsRegexStr, 'i'),
     lookAheadDays = parseInt(props.getProperty('LOOK_AHEAD_DAYS')) || 4,
     skipColorCode = props.getProperty('SKIP_COLOR_CODE') || '11', // '11' is Tomato (Red)
-    skipFlagRaw = props.getProperty('SKIP_FLAG') || "#nocommute, #skip, Hotel",
+    skipFlagRaw = props.getProperty('SKIP_FLAG') || "#nocommute, #skip, Flight, Hotel",
     skipKeywordsRegexStr = skipFlagRaw?.split(',')?.map(k => k.trim().toLowerCase())?.join("|"),
     dynamicRegex = new RegExp(skipKeywordsRegexStr, 'i'),
     afterCommuteRaw = props.getProperty('AFTER_COMMUTE_KEYWORDS') || "#aftercommute, #return, #drivehome, Flight, Airport, Hotel",
