@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Included `Flight` in the default `SKIP_FLAG` blacklist.
 
 ### Changed
-- Decreased the worker debounce timer for faster responsive execution.
+- Decreased the worker debounce timer default value from `8` to `5` minutes.
+- **Documentation Overhaul**: Consolidated repository documentation by merging the `google-calendar/README.md` into the root-level `README.md`.
+- Implemented a scalable, collapsible `<details>` structure in the root README. This sets the stage for future automation scripts (like Sheets or Docs) to be cleanly housed in the same monorepo without cluttering the primary landing page.
+- Updated repository file tree diagram to accurately reflect the removal of the nested README and inclusion of the `CHANGELOG.md` and configuration files.
 
 ## [0.4.0] - 2026-05-12
 ### Added
