@@ -285,12 +285,13 @@ function getEventsFiltered() {
     afterCommuteRegex = new RegExp(afterCommuteRegexStr, 'i'),
     now = new Date(),
     horizon = new Date(now),
-    calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary}) => dynamicCalRegex.test(summary));
+    calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary, primary}) => dynamicCalRegex.test(summary) || primary);
   horizon.setDate(now.getDate() + lookAheadDays);
   horizon.setHours(23,59,59,999);
   // console.log("got skipFlagRaw = ", skipFlagRaw, "\n\n skipFlagRaw split arr = ", skipFlagRaw?.split(','), "\n\n props.getProperty('SKIP_FLAG') = ", props.getProperty('SKIP_FLAG'));
   // console.log("dynamicRegex = ", dynamicRegex);
-  calendarList?.unshift({id: 'primary', summary: 'Primary'});
+
+  // calendarList?.forEach(({summary, id, primary}) => console.log(`got calendar :- \n\t name - ${summary}, \n\t id - ${id}, \n\t primary - ${primary}\n`));
 
   const options = {
       timeMin: now.toISOString(),
@@ -401,12 +402,12 @@ function resolveLocation(eventLocation, eventDescription, locType = 'origin') {
 function setCalendarUpdateTriggers() {
   removeAllCalendarUpdateTriggers();
   let props = PropertiesService.getScriptProperties(),
-    myEmail = Session.getEffectiveUser().getEmail(),
     sharedCalsRaw = props.getProperty('SHARED_CALENDAR_NAMES') || "",
     sharedCalsRegexStr = sharedCalsRaw?.split(',')?.map(k => k.trim())?.join("|"),
     dynamicCalRegex = new RegExp(sharedCalsRegexStr, 'i'),
-  calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary}) => dynamicCalRegex.test(summary));
-  calendarList.unshift({id: myEmail, summary: 'Primary'});
+  calendarList = Calendar.CalendarList?.list()?.items?.filter(({summary, primary}) => dynamicCalRegex.test(summary) || primary);
+
+  // calendarList?.forEach(({summary, id, primary}) => console.log(`have calendar :- \n\t name - ${summary}, \n\t id - ${id}, \n\t primary - ${primary}\n`));
   calendarList.forEach(({id, summary}) => {
     try {
       ScriptApp.newTrigger('markCalendarDirty')
@@ -427,4 +428,3 @@ function removeAllCalendarUpdateTriggers(funcStr = 'markCalendarDirty', eventTyp
   });
   console.log("🔕 Temporarily muted all Calendar Update triggers.");
 }
-
