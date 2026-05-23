@@ -10,7 +10,7 @@ I treat personal life inefficiencies like technical debt. This repository is my 
 ### 🎯 The Goal
 The primary goal of this repo is to house "Quality of Life" (QoL) improvements. These aren't just simple macros; they are robust, stateful automations designed with dynamic triggers, race-condition safeguards, and clean architecture.
 
-I'm making this public to share my thought process and code logic with the community. Feel free to borrow, adapt, or get inspired to build your own digital assistants!
+Feel free to borrow, adapt, or get inspired to build your own digital assistants!
 
 ### 📂 Repository Structure
 This is structured as a monorepo, keeping each automation isolated in its own domain:
@@ -43,8 +43,8 @@ I built this script to entirely remove that mental load. This automation acts as
 * **Intelligent Routing:** Uses Google Maps service to calculate real-time driving or transit durations between an origin and the event destination.
 * **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g. flights, hotels, `#nocommute`, `#skip`) or specific event color, and checks if a commute block already exists to prevent duplicates.
 * **Custom Overrides via Regex:** If you are traveling or need a specific setup, simply add tags to your event description! The script parses:
-  * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases using the `CITY_PLACES_MAP`: `home` | `work` | `office` | `airport` | `hotel` | `default`).
-  * `Destination: <Location>` or `EndLocation: <Location>` to set a custom destination for after-commutes.
+  * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases using the `CITY_PLACES_MAP`: `home` | `work` | `office` | `airport` | `hotel` | `default`). If `MULTI_ORIGIN` is set to `true`, you can add this tag multiple times on separate lines to generate multiple distinct commutes for different people!
+  * `Destination: <Location>` or `EndLocation: <Location>` to set a custom destination for after-commutes. (Also supports multi-destinations if enabled).
   * `ArriveBuffer: <mins>` / `ArriveTime: <mins>`, `PrepBuffer: <mins>` / `PrepTime: <mins>`, and `PostPrepBuffer: <mins>` / `AfterPrepTime: <mins>` to dynamically alter preparation times (all numbers are evaluated as minutes). *Note: If these are already defined for the event category in `EVENT_BUFFERS_MAP`, these tags can be omitted.*
 * **Smart After-Commutes:** For events like flights or hotel stays, it creates a `🚕 After-Commute` block starting *after* the event finishes. For flights, it intelligently extracts the arrival airport directly from the event title / description combined (e.g., "Flight to New York") to use as your precise starting location, mapping you seamlessly to your local hotel/home! Unlike the `SKIP_FLAG` blacklist, `AFTER_COMMUTE_KEYWORDS` acts as a whitelist. Including `#aftercommute`, `#return` or `#drivehome` in any event's description will explicitly tell the script to create an after-commute event for it.
 * **Transit Mode:** Include `#transit`, `#metro`, `#bus`, or `#train` in the event title or description to calculate public transit durations instead of driving.
@@ -53,6 +53,8 @@ I built this script to entirely remove that mental load. This automation acts as
 * **Rich UI in Calendar:** Generates clean HTML descriptions for the commute event, utilizing emojis (🚗, 🚈, 🚩, 🏃🏻) for a quick, readable breakdown of travel and prep time.
 * **Bulletproof Trigger Architecture:** Uses a dual-trigger system. An `onCalendarUpdate` trigger catches immediate changes, while a "Nightly Sweeper" time-driven trigger efficiently manages events scheduled far in the future, bypassing Google's strict trigger quotas.
 * **Configurable Debounce Logic:** Handles rapid successive calendar updates gracefully by dynamically creating and clearing execution timers to avoid redundant API calls.
+
+> ⚠️ **Note on Multi-Origin & Attendee Sync:** If you enable the `MULTI_ORIGIN` property and specify multiple start points (e.g., generating one commute from your house, and a second commute from your friend's house), the script will successfully generate distinct commute events for both routes. However, because of the **Smart Attendee Sync** feature, *all* attendees on the original event will be invited to *all* generated commute blocks. Both you and your friend will see both drives on your respective calendars. Use this feature when you are okay with slightly more calendar visibility/overlap!
 
 ### 🕰️ The "Two-Trigger" Architecture
 Google Apps Script has a hard quota limit of 20 triggers per user. Naively creating a dynamic trigger for every single future calendar event (e.g., appointments booked months in advance) would quickly crash the script. To make this system flawless and infinitely scalable, I engineered a highly efficient "Two-Trigger" architecture:
@@ -82,6 +84,7 @@ The script relies on the following variables stored in `PropertiesService.getScr
 | `SKIP_FLAG` | Comma-separated list of keywords to ignore. | `"#nocommute, #skip, Flight, Hotel"` |
 | `AFTER_COMMUTE_KEYWORDS` | Comma-separated list of keywords that trigger an After-Commute instead of a pre-commute. | `"#aftercommute, #return, #drivehome, Flight, Airport, Hotel"` |
 | `SHARED_CALENDAR_NAMES` | Comma-separated list of shared/secondary calendars to monitor (matches against the Calendar's Name / Title). | `"Parents Calendar, Family"` |
+| `MULTI_ORIGIN` | Boolean flag to enable generating multiple commute events from multiple start points or to multiple destinations for a single event. | `false` |
 | `CITY_PLACES_MAP` | JSON mapping for dynamic start/end locations by city. | *See example below* |
 | `SKIP_COLOR_CODE` | The Calendar API color ID used to manually flag an event to be ignored by the script. | `"11"` (Tomato) |
 
@@ -129,6 +132,8 @@ If you have a specific one-off event (like a connecting layover flight) that you
 * `10` : Basil (Green)
 * `11` : Tomato (Red) - **[Default]** for skipping events
 
+<br>
+
 > ⚠️ **Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default because flight events typically mark the exact flight duration, making a standard pre-commute block impractical. However, thanks to the **After-Commute** logic, the script intelligently intercepts flight events via the `AFTER_COMMUTE_KEYWORDS` config. It skips the useless pre-commute and automatically generates a `🚕 After-Commute` starting *after* you land, routing you from the destination airport straight to your local `CITY_PLACES_MAP` home/hotel!
 
 > ⚠️ **Note on Graphite (Gray):** While you can configure the script to use `"8"` as the skip color, it is highly recommended to use another color. The script automatically creates the actual "🚗 Commute" events using this exact Gray color code to keep your calendar visually clean. Using it as a skip flag could cause confusion!
@@ -152,6 +157,6 @@ This script is broken down into 8 core functions, prioritizing separation of con
 
 ### 🔭 Future Scope
 
-Whenever I encounter a daily workflow that can be logically broken down and automated via the Google ecosystem (Gmail, Drive, Sheets, etc.), the solution will live here.
+Whenever I encounter a daily workflow that can be logically automated via the Google Workspace ecosystem (Gmail, Drive, Sheets, etc.), the solution will live here.
 
 ---

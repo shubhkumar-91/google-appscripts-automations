@@ -27,7 +27,7 @@ function syncCommuteFinal(filteredEventsMap = {}) {
     let filteredEvents = filteredEventsMap?.[key]?.eventList || [];
     filteredEvents.forEach(event => {
     const title = (event.summary || "").toLowerCase();
-    const desc = (event.description || "").toLowerCase();
+    const desc = (event.description || "").toLowerCase().split('<li>').join('\n').replace(/<\/?(ul|ol|li|br|b)\b[^>]*>/gi, '');
     const location = event.location;
     const attUsers = event?.attendees?.filter(user => !user?.self)?.map(user => user?.email)?.join();
 
@@ -66,30 +66,57 @@ function syncCommuteFinal(filteredEventsMap = {}) {
         // console.log("📍 Custom Prep Buffer found for event '" + title);
       }
 
-      const originLocation = resolveLocation(location, desc, 'origin');
+      // Read property (add this near the top of your function with the other props if you prefer)
+      const isMultiOrigin = props.getProperty('MULTI_ORIGIN') == 'true';
 
-      // Call Maps Service with Traffic & Mode awareness
-      const commuteEventTime = getTrafficAdjustedStartTime(originLocation, location, event.summary, eventStart, finalArrivalBuffer, finalPrepBuffer, isTransit);
+      // 1. Extract ALL Origins using global regex (/gi)
+      let originMatches = desc?.match(/(?:Start|Origin):\s*(.+)/gi) || [];
+      let customOrigins = originMatches?.map(m => m?.replace(/(?:Start|Origin):\s*/i, '')?.trim());
 
-      if (!commuteEventTime)
-        console.error(`No directions found from maps for ${event.summary}, Check script for edge case here !!`);
-      else if (alreadyHasCommute(key, title, commuteEventTime?.commuteStart, eventStart))
-        console.log("⚠️ Due to race condition, the event already exist, skipping event addition here !!");
-      else {
-        let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Early: ${finalArrivalBuffer}m</li></ul>`};
+      // 2. Enforce limits based on config
+      if (!isMultiOrigin && customOrigins?.length) customOrigins = [customOrigins[0]]; // Fallback to 1
+      // if (customOrigins?.length > 5) customOrigins = customOrigins.slice(0, 5); // Cap at 5
+      if (!customOrigins?.length) customOrigins = [null]; // Null triggers default resolution
 
-        if(attUsers?.length)
-          eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
+      // 3. Loop and Generate
+      customOrigins.forEach((customLoc, index) => {
 
-        // Create the Commute Event
+        // Feed a mock description to resolveLocation so it parses our specific extracted location
+        const mockDesc = customLoc ? `Origin: ${customLoc}` : desc;
+        const originLocation = resolveLocation(location, mockDesc, 'origin');
+
+        // Call Maps Service
+        const commuteEventTime = getTrafficAdjustedStartTime(originLocation, location, event.summary, eventStart, finalArrivalBuffer, finalPrepBuffer, isTransit);
+
+        if (!commuteEventTime) {
+          console.error(`No directions found from maps for ${event.summary} (Origin: ${originLocation})`);
+          return; // Skip this iteration
+        }
+
+        const titlePrefix = customOrigins.length > 1 ? `🚗 Commute (${index + 1}): ` : "🚗 Commute: ";
+        const commuteTitle = titlePrefix + (title || "#NO TITLE FOUND");
+
+        if (alreadyHasCommute(key, commuteTitle, commuteEventTime?.commuteStart, eventStart)) {
+          console.log(`⚠️ Race condition check: event already exists for origin ${originLocation}.`);
+          return;
+        }
+
+        // Inject the new Origin bullet point!
+        let eventOpts = {
+          description: `<ul><li>${isTransit ? "🚈 Transit" : "🚗 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Prep: ${finalPrepBuffer}m</li><li>🚩 Arriving Early: ${finalArrivalBuffer}m</li><li>📍 Start: ${customLoc || originLocation}</li></ul>`
+        };
+
+        if(attUsers?.length) eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
+
         CalendarApp.getCalendarById(key).createEvent(
-          "🚗 Commute: " + (title || "#NO TITLE FOUND"),
+          titlePrefix + (event.summary || "#NO TITLE FOUND"),
           commuteEventTime?.commuteStart,
           eventStart,
           eventOpts
         ).setLocation(location).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
+
         console.log(commuteEventTime?.logMsg);
-      }
+      });
 
     // ----- AFTER-COMMUTE LOGIC -----
     if (isAfterCommute) {
@@ -113,27 +140,50 @@ function syncCommuteFinal(filteredEventsMap = {}) {
         // console.log("📍 Custom Post Prep Buffer found for event '" + title);
       }
 
-      const destinationLocation = resolveLocation(afterCommuteOrigin, desc, 'destination');
-      const commuteEventTime = getAfterCommuteTimes(afterCommuteOrigin, destinationLocation, event.summary, eventEnd, finalPostPrepBuffer, isTransit);
+      // 1. Extract ALL Destinations using global regex (/gi)
+      let destMatches = desc?.match(/(?:Destination|EndLocation):\s*(.+)/gi) || [];
+      let customDests = destMatches?.map(m => m.replace(/(?:Destination|EndLocation):\s*/i, '').trim());
 
-      if (!commuteEventTime)
-        console.error(`No after-commute directions found from maps for ${event.summary}, Check script for edge case here !!`);
-      else if (alreadyHasCommute(key, title, eventEnd, commuteEventTime?.commuteEnd))
-        console.log("⚠️ Due to race condition, the after-commute event already exist, skipping addition.");
-      else {
-        let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚕 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Post-Prep: ${finalPostPrepBuffer}m</li></ul>`};
+      // 2. Enforce limits
+      if (!isMultiOrigin && customDests?.length) customDests = [customDests[0]];
+      // if (customDests?.length > 5) customDests = customDests.slice(0, 5);
+      if (!customDests?.length) customDests = [null];
+
+      // 3. Loop and Generate
+      customDests.forEach((customDest, index) => {
+
+        const mockDesc = customDest ? `Destination: ${customDest}` : desc;
+        const destinationLocation = resolveLocation(afterCommuteOrigin, mockDesc, 'destination');
+
+        const commuteEventTime = getAfterCommuteTimes(afterCommuteOrigin, destinationLocation, event.summary, eventEnd, finalPostPrepBuffer, isTransit);
+
+        if (!commuteEventTime) {
+          console.error(`No after-commute directions found from maps for ${event.summary}, Check script for edge case here !!`);
+          return;
+        }
+
+        const titlePrefix = customDests.length > 1 ? `🚕 After-Commute (${index + 1}): ` : "🚕 After-Commute: ";
+        const commuteTitle = titlePrefix + (event.summary || "#NO TITLE FOUND");
+
+        if (alreadyHasCommute(key, commuteTitle, eventEnd, commuteEventTime?.commuteEnd)) {
+          console.log("⚠️ Due to race condition, the after-commute event already exist, skipping addition.");
+          return;
+        }
+
+        // Inject the Origin & Destination bullet points!
+        let eventOpts = {description: `<ul><li>${isTransit ? "🚈 Transit" : "🚕 Drive"} Time: ${commuteEventTime?.durationText}</li><li>🏃🏻 Post-Prep: ${finalPostPrepBuffer}m</li><li>📍 Start: ${afterCommuteOrigin}</li><li>📍 End: ${customDest || destinationLocation}</li></ul>`};
 
         if(attUsers?.length)
           eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
 
         CalendarApp.getCalendarById(key).createEvent(
-          "🚕 After-Commute: " + (event.summary || "#NO TITLE FOUND"),
+          titlePrefix + (event.summary || "#NO TITLE FOUND"),
           commuteEventTime?.commuteStart,
           commuteEventTime?.commuteEnd,
           eventOpts
         ).setLocation(destinationLocation).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
         console.log(commuteEventTime?.logMsg);
-      }
+      });
     }
   });
   }
@@ -224,12 +274,19 @@ function getAfterCommuteTimes(origin, destination, eventSummary, eventEndTime, p
 
 
 
-function alreadyHasCommute(calendarId, title, start, end) {
-  const searchTitlePre = "🚗 Commute: " + title;
-  const searchTitlePost = "🚕 After-Commute: " + title;
-  const existingPre = CalendarApp.getCalendarById(calendarId).getEvents(start, end, {search: searchTitlePre});
-  const existingPost = CalendarApp.getCalendarById(calendarId).getEvents(start, end, {search: searchTitlePost});
-  return !!existingPre.length || !!existingPost.length
+function alreadyHasCommute(calendarId, titleOrFullTitle, start, end) {
+  if (!titleOrFullTitle) return false;
+  const events = CalendarApp.getCalendarById(calendarId).getEvents(start, end);
+  const isFullTitle = titleOrFullTitle.startsWith("🚗") || titleOrFullTitle.startsWith("🚕");
+
+  if (isFullTitle) {
+    return events.some(e => e.getTitle() === titleOrFullTitle);
+  } else {
+    return events.some(e => {
+      const t = e.getTitle();
+      return (t.includes("Commute") && t.includes(titleOrFullTitle));
+    });
+  }
 }
 
 
