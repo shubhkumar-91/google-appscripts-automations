@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-06-28
+
+### Added
+- **Apple Calendar Compatibility Note**: Added guidance in `README.md` explaining how Apple's native calendar invite security filters affect rich HTML description visibility on pending invites.
+
+### Fixed
+- **Automatic Google Meet Link Removal**: Configured the script to programmatically strip auto-generated Google Meet video conference links from commute events using `Calendar.Events.patch` when attendee invitations are synced.
+
 ## [0.6.0] - 2026-05-23
 
 ### Added
@@ -13,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Commute Duplicate Guard**: Updated `alreadyHasCommute` to check exact titles (including multi-origin index prefixes like `🚗 Commute (1):`) during event generation. This prevents concurrent commutes from skipping one another and avoids duplicate events on subsequent calendar syncs.
+- **Description HTML Stripping**: Cleaned and stripped HTML tags (such as `<ul>`, `<li>`, `<br>`) from descriptions within `syncCommuteFinal` to ensure regex-based override parsing (e.g., `Start:` / `Origin:`) is highly robust.
 
 ## [0.5.1] - 2026-05-22
 
