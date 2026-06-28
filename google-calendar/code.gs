@@ -108,12 +108,18 @@ function syncCommuteFinal(filteredEventsMap = {}) {
 
         if(attUsers?.length) eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
 
-        CalendarApp.getCalendarById(key).createEvent(
+        const newCommute = CalendarApp.getCalendarById(key).createEvent(
           titlePrefix + (event.summary || "#NO TITLE FOUND"),
           commuteEventTime?.commuteStart,
           eventStart,
           eventOpts
         ).setLocation(location).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
+
+        // Strip the auto-generated Google Meet link
+        try {
+          const eventId = newCommute.getId().split('@')[0];
+          Calendar.Events.patch({ conferenceData: null }, key, eventId, { conferenceDataVersion: 1 });
+        } catch(e) { console.error("⚠️ Failed to remove Meet link: " + e.message); }
 
         console.log(commuteEventTime?.logMsg);
       });
@@ -176,12 +182,19 @@ function syncCommuteFinal(filteredEventsMap = {}) {
         if(attUsers?.length)
           eventOpts = {...eventOpts, ...{guests: attUsers, sendInvites: true}};
 
-        CalendarApp.getCalendarById(key).createEvent(
+        const newAfterCommute = CalendarApp.getCalendarById(key).createEvent(
           titlePrefix + (event.summary || "#NO TITLE FOUND"),
           commuteEventTime?.commuteStart,
           commuteEventTime?.commuteEnd,
           eventOpts
         ).setLocation(destinationLocation).setColor(CalendarApp.EventColor.GRAY).removeAllReminders().addPopupReminder(5).addPopupReminder(20);
+
+        // Strip the auto-generated Google Meet link
+        try {
+          const eventId = newAfterCommute.getId().split('@')[0];
+          Calendar.Events.patch({ conferenceData: null }, key, eventId, { conferenceDataVersion: 1 });
+        } catch(e) { console.error("⚠️ Failed to remove Meet link: " + e.message); }
+
         console.log(commuteEventTime?.logMsg);
       });
     }
