@@ -42,7 +42,7 @@ function syncCommuteFinal(filteredEventsMap = {}) {
     // 5. Maps API for Travel Duration
     const eventStart = new Date(event.start.dateTime || event.start.date || event.start);
     const eventEnd = new Date(event.end.dateTime || event.end.date || event.end);
-    const isAfterCommute = afterCommuteRegex.test(fullText);
+    const isAfterCommute = afterCommuteRegex.test(fullText) && !/(?:#noaftercommute|#skipaftercommute)/i.test(fullText);
 
     const isTransit = transitKeywords.some(kw => title.includes(kw) || desc.includes(kw));
     if (isTransit) console.log(`🚈 TRANSIT mode detected : ${event.summary}`);
@@ -378,7 +378,7 @@ function getEventsFiltered() {
 
       const fullText = (summary || "") + " " + (description || "");
       const isSkip = dynamicRegex.test(fullText);
-      const isAfterCommute = afterCommuteRegex.test(fullText);
+      const isAfterCommute = afterCommuteRegex.test(fullText) && !/(?:#noaftercommute|#skipaftercommute)/i.test(fullText);
       if (isSkip && !isAfterCommute) return false;
       if(alreadyHasCommute(calId, summary, now, horizon)) return false;
       return true;

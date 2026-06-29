@@ -40,19 +40,30 @@ We’ve all been there: you book an appointment, buy movie tickets, or schedule 
 I built this script to entirely remove that mental load. This automation acts as a background worker. Whenever an event with a physical location is added to my calendar, it automatically calculates the transit time via Google Maps, factors in preparation time, and visually blocks out my commute directly on my calendar. It operates quietly, efficiently, and completely hands-free.
 
 ### ✨ Key Features
+
 * **Intelligent Routing:** Uses Google Maps service to calculate real-time driving or transit durations between an origin and the event destination.
+
 * **Smart Filtering:** Automatically ignores events with blacklisted keywords (e.g. flights, hotels, `#nocommute`, `#skip`) or specific event color, and checks if a commute block already exists to prevent duplicates.
+
 * **Custom Overrides via Regex:** If you are traveling or need a specific setup, simply add tags to your event description! The script parses:
   * `Start: <Location>` or `Origin: <Location>` to override the default home address. (Also supports custom aliases using the `CITY_PLACES_MAP`: `home` | `work` | `office` | `airport` | `hotel` | `default`). If `MULTI_ORIGIN` is set to `true`, you can add this tag multiple times on separate lines to generate multiple distinct commutes for different people!
   * `Destination: <Location>` or `EndLocation: <Location>` to set a custom destination for after-commutes. (Also supports multi-destinations if enabled).
   * `ArriveBuffer: <mins>` / `ArriveTime: <mins>`, `PrepBuffer: <mins>` / `PrepTime: <mins>`, and `PostPrepBuffer: <mins>` / `AfterPrepTime: <mins>` to dynamically alter preparation times (all numbers are evaluated as minutes). *Note: If these are already defined for the event category in `EVENT_BUFFERS_MAP`, these tags can be omitted.*
+
 * **Smart After-Commutes:** For events like flights or hotel stays, it creates a `🚕 After-Commute` block starting *after* the event finishes. For flights, it intelligently extracts the arrival airport directly from the event title / description combined (e.g., "Flight to New York") to use as your precise starting location, mapping you seamlessly to your local hotel/home! Unlike the `SKIP_FLAG` blacklist, `AFTER_COMMUTE_KEYWORDS` acts as a whitelist. Including `#aftercommute`, `#return` or `#drivehome` in any event's description will explicitly tell the script to create an after-commute event for it.
+> **Note:** If an event triggers an after-commute by default, such as an Airport visit, but you only want a one-way pre-commute for a drop-off, simply add `#noaftercommute` or `#skipaftercommute` to the description).
+
 * **Transit Mode:** Include `#transit`, `#metro`, `#bus`, or `#train` in the event title or description to calculate public transit durations instead of driving.
+
 * **Shared Calendar Support:** Automatically monitors and blocks commutes for events added to any configured shared or secondary calendars (e.g. Family calendars).
+
 * **Smart Attendee Sync:** Automatically copies guests (attendees) from the source event over to the created commute block, ensuring everyone is kept in the loop!
+
 * **Rich UI in Calendar:** Generates clean HTML descriptions for the commute event, utilizing emojis (🚗, 🚈, 🚩, 🏃🏻) for a quick, readable breakdown of travel and prep time.
 > 📱 **Note for Apple Calendar Users:** If you invite friends who use the native Apple Calendar app on iOS/macOS, Apple's strict security filters temporarily hide rich HTML formatting (like emojis and bullet points) from *pending/unaccepted* calendar invites. The commute block description will appear blank initially. Once they tap **"Accept"**, Apple syncs directly with Google and renders the beautiful rich UI! Alternatively, friends using the official Google Calendar app on iOS will see the perfect formatting immediately, bypassing this Apple quirk entirely.
+
 * **Bulletproof Trigger Architecture:** Uses a dual-trigger system. An `onCalendarUpdate` trigger catches immediate changes, while a "Nightly Sweeper" time-driven trigger efficiently manages events scheduled far in the future, bypassing Google's strict trigger quotas.
+
 * **Configurable Debounce Logic:** Handles rapid successive calendar updates gracefully by dynamically creating and clearing execution timers to avoid redundant API calls.
 
 > ⚠️ **Note on Multi-Origin & Attendee Sync:** If you enable the `MULTI_ORIGIN` property and specify multiple start points (e.g., generating one commute from your house, and a second commute from your friend's house), the script will successfully generate distinct commute events for both routes. However, because of the **Smart Attendee Sync** feature, *all* attendees on the original event will be invited to *all* generated commute blocks. Both you and your friend will see both drives on your respective calendars. Use this feature when you are okay with slightly more calendar visibility/overlap!
@@ -62,11 +73,16 @@ Google Apps Script has a hard quota limit of 20 triggers per user. Naively creat
 
 **1. The Scout & Scheduler (`markCalendarDirty`)**
 This acts as the watcher, powered by static triggers:
+
 * **Event-Driven (`onCalendarUpdate`):** Catches any real-time additions or modifications made to your Primary and Shared calendars immediately. *(Note: You must run `setCalendarUpdateTriggers()` once manually to programmatically attach these watchers).*
+
 * **Time-Driven ("The Nightly Sweeper"):** Runs once daily between `04:00 AM - 05:00 AM`. Instead of setting dozens of individual triggers for events weeks away, this sweep simply wakes up and checks if any of those distant events have finally entered our rolling 4-day action window.
 
+
 **2. The Worker (`processedDeferredCommute`)**
+
 * **The Dynamic Debounce:** The Worker has NO permanent triggers. When the Scout detects valid events, it programmatically creates a single, temporary time-driven trigger to run the Worker a few minutes later (configurable via properties). If multiple calendar edits are made rapidly, the script deletes the old trigger and resets the timer. This debounce ensures that even if I edit 5 events in 3 minutes, the heavy lifting only happens *once*.
+
 * **Trigger Muting (Recursive Loop Preventer):** When the Worker actually processes events and adds new Commute blocks, those additions would normally fire another calendar update trigger! To prevent this recursive loop, the Worker temporarily **mutes** all `onCalendarUpdate` triggers while it runs, and seamlessly reinstalls them once finished.
 
 ### ⚙️ Configuration & Script Properties
@@ -137,6 +153,8 @@ If you have a specific one-off event (like a connecting layover flight) that you
 
 > ⚠️ **Note on Flights & Airports:** `Flight` is included in the `SKIP_FLAG` blacklist by default because flight events typically mark the exact flight duration, making a standard pre-commute block impractical. However, thanks to the **After-Commute** logic, the script intelligently intercepts flight events via the `AFTER_COMMUTE_KEYWORDS` config. It skips the useless pre-commute and automatically generates a `🚕 After-Commute` starting *after* you land, routing you from the destination airport straight to your local `CITY_PLACES_MAP` home/hotel!
 
+<br>
+
 > ⚠️ **Note on Graphite (Gray):** While you can configure the script to use `"8"` as the skip color, it is highly recommended to use another color. The script automatically creates the actual "🚗 Commute" events using this exact Gray color code to keep your calendar visually clean. Using it as a skip flag could cause confusion!
 
 ### 🧠 Logic & Thought Process
@@ -150,10 +168,11 @@ This script is broken down into 8 core functions, prioritizing separation of con
 7. **`resolveLocation(...)`**: Determines the correct start/end locations by evaluating regex tags, city places mapping, and defaults.
 8. **`setCalendarUpdateTriggers()` & `removeAllCalendarUpdateTriggers()`**: Utilities that programmatically manage the lifecycle of `onCalendarUpdate` triggers across your primary and shared calendars to prevent recursive execution loops.
 
-*Note: Ensure your `appsscript.json` manifest file has the correct `timeZone` configured (e.g., "Asia/Kolkata") for accurate EOD window boundary calculations!*
+<br>
+
+> ⚠️ *Note: Ensure your `appsscript.json` manifest file has the correct `timeZone` configured (e.g., "Asia/Kolkata") for accurate EOD window boundary calculations!*
 
 </details>
-
 <br>
 
 ### 🔭 Future Scope

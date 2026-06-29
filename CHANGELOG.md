@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.1] - 2026-06-28
 
 ### Added
+- **Targeted After-Commute Bypass:** Added support for `#noaftercommute` and `#skipaftercommute` tags in event descriptions. This allows users to selectively abort the generation of an After-Commute block while leaving the Pre-Commute block intact (e.g., airport drop-offs).
 - **Apple Calendar Compatibility Note**: Added guidance in `README.md` explaining how Apple's native calendar invite security filters affect rich HTML description visibility on pending invites.
 
 ### Fixed
