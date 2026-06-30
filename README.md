@@ -26,12 +26,19 @@ google-appscripts-automations/
 ├── .gitignore
 ├── CHANGELOG.md           # Version history
 ├── LICENSE                # MIT License
-└── README.md              # You are here
+├── README.md              # You are here
+└── SETUP_GUIDE.md         # Detailed step-by-step setup instructions
 ```
+
+### 🛠️ Getting Started & Setup
+
+Whether you are looking for a quick installation on a personal account or an advanced enterprise setup, follow the step-by-step instructions in [SETUP_GUIDE.md](SETUP_GUIDE.md) to enable automation. It covers:
+* **The Standard Path:** A quick 5-minute setup guide for personal `@gmail.com` accounts.
+* **The Enterprise Path:** Setup instructions for Google Workspace custom domains to avoid OAuth token expiration.
 
 <details open>
 <summary>
-<h3 style="display: inline-block;"> 📅 CommuteSync: The Intelligent Auto-Commute Planner for Google Calendar</h3>
+<h3 style="display: inline-block;"> 📅 CommuteSync: ✨ The Intelligent Auto-Commute Planner for Google Calendar</h3>
 </summary>
 
 ### 💡 The "Why" & The Impact
