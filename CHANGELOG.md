@@ -5,9 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Project Rebranding:** Officially renamed the automation to **CommuteSync: The Intelligent Auto-Commute Planner for Google Calendar**. Updated all internal references across the repository.
+- **Documentation Overhaul:** Added a comprehensive `SETUP_GUIDE.md` featuring two distinct installation paths: a 5-minute Standard Path for personal Gmail accounts, and an Enterprise Path to help Google Workspace users bypass GCP sandbox restrictions and 7-day token expirations.
+
 ## [0.6.1] - 2026-06-28
 
 ### Added
+- **Targeted After-Commute Bypass:** Added support for `#noaftercommute` and `#skipaftercommute` tags in event descriptions. This allows users to selectively abort the generation of an After-Commute block while leaving the Pre-Commute block intact (e.g., airport drop-offs).
 - **Apple Calendar Compatibility Note**: Added guidance in `README.md` explaining how Apple's native calendar invite security filters affect rich HTML description visibility on pending invites.
 
 ### Fixed
