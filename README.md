@@ -31,7 +31,7 @@ google-appscripts-automations/
 
 <details open>
 <summary>
-<h3 style="display: inline-block;"> 📅 Google Calendar - 🚀 Smart Auto-Commute</h3>
+<h3 style="display: inline-block;"> 📅 CommuteSync: The Intelligent Auto-Commute Planner for Google Calendar</h3>
 </summary>
 
 ### 💡 The "Why" & The Impact

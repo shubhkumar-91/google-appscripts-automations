@@ -1,6 +1,6 @@
-# 🛠️ Setup Guide: The Silent Commuter
+# 🛠️ Setup Guide: 📅 CommuteSync
 
-Welcome to the installation guide for **The Silent Commuter**.
+Welcome to the installation guide for **CommuteSync**.
 
 Because Google handles permissions differently depending on your account type, this guide is split into two paths. Choose the one that matches your Google account:
 
@@ -15,7 +15,7 @@ Because Google handles permissions differently depending on your account type, t
 ### Step 1: Create the Apps Script Project
 1. Go to [script.google.com](https://script.google.com/) and ensure you are logged into your primary Google account.
 2. Click **New Project** in the top left.
-3. Rename the project at the top to `Silent Commuter` (or whatever you prefer).
+3. Rename the project at the top to `CommuteSync` (or whatever you prefer).
 
 ### Step 2: Add the Code & Advanced Services
 1. In the editor (`Code.gs`), delete the empty `myFunction()`.
@@ -43,7 +43,7 @@ You only need to do this once to turn the automation on.
    * Click **Review Permissions**.
    * Choose your Google Account.
    * You will see a warning: *"Google hasn't verified this app."* (This is normal for personal scripts).
-   * Click **Advanced** at the bottom, then click **Go to Silent Commuter (unsafe)**.
+   * Click **Advanced** at the bottom, then click **Go to CommuteSync (unsafe)**.
    * Click **Allow**.
 
 🎉 **You are done!** Create a test event on your calendar with a physical location in the next 4 days, wait a few minutes, and watch the commute block magically appear.
@@ -61,7 +61,7 @@ First, follow **Steps 1 through 3** from the Standard Path above to get your cod
 ### Step 2: Create a Dedicated GCP Project
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
 2. Click the Project Dropdown at the top left and select **New Project**.
-3. Name it `Silent-Commuter-Engine` and click **Create**.
+3. Name it `CommuteSync-Engine` and click **Create**.
 4. Once created, ensure the project is selected. Go to your dashboard and copy the **Project Number** (a long string of digits).
 
 ### Step 3: Enable the Required APIs
@@ -80,7 +80,7 @@ When using a custom GCP project, it needs explicit permission to use Maps and Ca
 If you don't do this step, your OAuth token will expire exactly 7 days from now, and the script will silently fail.
 1. Back in the GCP Console, go to **APIs & Services > OAuth consent screen**.
 2. Select **External** (or **Internal** if available in your active Workspace) and hit Create.
-3. Fill in the required fields (App Name: `Commuter`, User Support Email: your email). You can skip the domain and logo fields. Save and continue through Scopes and Test Users.
+3. Fill in the required fields (App Name: `CommuteSync`, User Support Email: your email). You can skip the domain and logo fields. Save and continue through Scopes and Test Users.
 4. **The Fix:** Once back on the OAuth consent screen dashboard, look under "Publishing status". It will currently say *Testing*. Click the **PUBLISH APP** button to push it to **In Production**.
    > *Note: Google will warn you that the app needs verification. Because you are the only user and not distributing this to the public, you can safely ignore this verification warning.*
 
