@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Project Rebranding:** Officially renamed the automation to **CommuteSync: The Intelligent Auto-Commute Planner for Google Calendar**. Updated all internal references across the repository.
 - **Documentation Overhaul:** Added a comprehensive `SETUP_GUIDE.md` featuring two distinct installation paths: a 5-minute Standard Path for personal Gmail accounts, and an Enterprise Path to help Google Workspace users bypass GCP sandbox restrictions and 7-day token expirations.
+- **Setup Guide Correction:** Updated the initialization instructions to explicitly include the manual setup of the "Nightly Sweeper" time-driven trigger for `markCalendarDirty`, ensuring events scheduled far in advance are processed correctly when they enter the look-ahead window.
 
 ## [0.6.1] - 2026-06-28
 
