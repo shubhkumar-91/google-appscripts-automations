@@ -35,16 +35,29 @@ The script needs to know your home address and preferences. We store these secur
 4. Click **Save script properties**.
 
 ### Step 4: Initialize the Watchers & Authorize
-You only need to do this once to turn the automation on.
-1. Go back to the `< > Editor` view.
+You only need to do this once to turn the automation on. This requires setting up two distinct triggers: one for real-time updates, and one for the Nightly Sweeper.
+
+**Part A: The Real-Time Watcher**
+1. Go back to the `< > Editor` view in Apps Script.
 2. From the function dropdown menu at the top, select `setCalendarUpdateTriggers`.
 3. Click **▶ Run**.
 4. **Authorization Required:** Google will prompt you to authorize the script.
    * Click **Review Permissions**.
    * Choose your Google Account.
-   * You will see a warning: *"Google hasn't verified this app."* (This is normal for personal scripts).
-   * Click **Advanced** at the bottom, then click **Go to CommuteSync (unsafe)**.
+   * You will see a warning: *"Google hasn't verified this app."* (This is normal).
+   * Click **Advanced** at the bottom, then click **Go to CommuteSync (unsafe)** (or whatever you named the project).
    * Click **Allow**.
+
+**Part B: The Nightly Sweeper (Time-Driven)**
+1. On the left sidebar of Apps Script, click the ⏰ **Triggers** icon (looks like a clock).
+2. Click the **+ Add Trigger** button in the bottom right corner.
+3. Configure the modal exactly as follows:
+   * **Choose which function to run:** `markCalendarDirty`
+   * **Choose which deployment should run:** `Head`
+   * **Select event source:** `Time-driven`
+   * **Select type of time based trigger:** `Day timer`
+   * **Select time of day:** `4am to 5am` (or your preferred off-hours window)
+4. Click **Save**.
 
 🎉 **You are done!** Create a test event on your calendar with a physical location in the next 4 days, wait a few minutes, and watch the commute block magically appear.
 
@@ -84,9 +97,27 @@ If you don't do this step, your OAuth token will expire exactly 7 days from now,
 4. **The Fix:** Once back on the OAuth consent screen dashboard, look under "Publishing status". It will currently say *Testing*. Click the **PUBLISH APP** button to push it to **In Production**.
    > *Note: Google will warn you that the app needs verification. Because you are the only user and not distributing this to the public, you can safely ignore this verification warning.*
 
-### Step 6: Initialize
+### Step 6: Initialize the Watchers & Authorize
+You only need to do this once to turn the automation on. This requires setting up two distinct triggers: one for real-time updates, and one for the Nightly Sweeper.
+
+**Part A: The Real-Time Watcher**
 1. Return to your Apps Script `< > Editor` view.
-2. Select `setCalendarUpdateTriggers` from the dropdown and click **▶ Run**.
-3. Authorize the app. Because it is linked to your GCP project in "Production" mode, the token will now last indefinitely.
+2. From the function dropdown menu at the top, select `setCalendarUpdateTriggers`.
+3. Click **▶ Run**.
+4. **Authorization Required:** Google will prompt you to authorize the app. Because it is linked to your GCP project in "Production" mode, the token will now last indefinitely.
+   * Click **Review Permissions** and choose your Google Account.
+   * If you see an unverified app warning, click **Advanced** at the bottom, then click **Go to [Your Project Name]**.
+   * Click **Allow**.
+
+**Part B: The Nightly Sweeper (Time-Driven)**
+1. On the left sidebar of Apps Script, click the ⏰ **Triggers** icon (looks like a clock).
+2. Click the **+ Add Trigger** button in the bottom right corner.
+3. Configure the modal exactly as follows (refer to the screenshot above):
+   * **Choose which function to run:** `markCalendarDirty`
+   * **Choose which deployment should run:** `Head`
+   * **Select event source:** `Time-driven`
+   * **Select type of time based trigger:** `Day timer`
+   * **Select time of day:** `4am to 5am` (or your preferred off-hours window)
+4. Click **Save**.
 
 🎉 **Setup complete!** Your enterprise-grade routing engine is live.
