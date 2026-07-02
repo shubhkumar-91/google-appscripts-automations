@@ -9,7 +9,11 @@ Because Google handles permissions differently depending on your account type, t
 
 ---
 
-## 🟢 The Standard Path (Personal Gmail Accounts)
+<details name="selected-path-type" open>
+<summary>
+<h2 style="display: inline-block; border:none;"> 🟢 The Standard Path (Personal Gmail Accounts) </h2>
+</summary>
+
 *Follow these steps if you are using a standard, personal Google account.*
 
 ### Step 1: Create the Apps Script Project
@@ -60,10 +64,15 @@ You only need to do this once to turn the automation on. This requires setting u
 4. Click **Save**.
 
 🎉 **You are done!** Create a test event on your calendar with a physical location in the next 4 days, wait a few minutes, and watch the commute block magically appear.
+</details>
 
 ---
 
-## 🏢 The Enterprise Path (Workspace & Legacy Admin Accounts)
+<details name="selected-path-type">
+<summary>
+<h2 style="display: inline-block; border:none;"> 🏢 The Enterprise Path (Workspace & Legacy Admin Accounts) </h2>
+</summary>
+
 *Follow these steps if you are using a custom domain (e.g., `you@yourcompany.com`), or if your personal account was previously a Workspace Admin and the script randomly stops working after 7 days.*
 
 Google Workspace environments sandbox Apps Script projects. To give the script permanent access to the Maps and Calendar APIs, you must link it to a standard Google Cloud Platform (GCP) project.
@@ -121,3 +130,4 @@ You only need to do this once to turn the automation on. This requires setting u
 4. Click **Save**.
 
 🎉 **Setup complete!** Your enterprise-grade routing engine is live.
+</details>
